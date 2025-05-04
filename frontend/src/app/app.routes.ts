@@ -2,8 +2,8 @@ import { Routes } from '@angular/router';
 import { LandingpageComponent } from './startingUI/landingpage/landingpage.component';
 import { SignupComponent } from './startingUI/signup/signup.component';
 import { LoginComponent } from './startingUI/login/login.component';
-//import { DashboardComponent } from './startingUI/dashboard/dashboard.component';
-//import { UsersComponent } from './admintenantuicomponents/users/users.component';
+
+import { UsersComponent } from './tenantUI/users/users.component';
 //import { UserDetailsComponent } from './admintenantuicomponents/user-details/user-details.component';
 
 export const routes: Routes = [
@@ -16,7 +16,7 @@ export const routes: Routes = [
       loadComponent: () => import('./startingUI/dashboard/dashboard.component').then(c => c.DashboardComponent),
       data: { animation: 'DashboardPage' } // Example
     },
-    //{ title:'Whitecape Backup Service | Users' , path:'users', component: UsersComponent, data: { animation: 'UsersPage' } },
+    { title:'Whitecape Backup Service | Users' , path:'users', component: UsersComponent, data: { animation: 'UsersPage' } },
     //{ path: 'users/:username', component: UserDetailsComponent, data: { animation: 'UserDetailsPage' } },
     // ... ensure ALL other navigable routes have unique animation data ...
 ];

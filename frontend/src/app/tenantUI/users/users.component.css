@@ -1,0 +1,16 @@
+/* Add any custom styles specific to the users page here if necessary */
+/* Example: Adjust spacing or specific element styles */
+:host ::ng-deep .p-toolbar {
+    padding: 0.5rem; /* Adjust toolbar padding if needed */
+    border-bottom: 1px solid var(--surface-border);
+}
+
+:host ::ng-deep .p-datatable .p-datatable-thead > tr > th {
+    background-color: var(--surface-section); /* Slightly different header background */
+    color: var(--text-color-secondary);
+    font-weight: 600;
+}
+
+:host ::ng-deep .p-datatable .p-paginator-bottom {
+    border-top: 1px solid var(--surface-border);
+}
