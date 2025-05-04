@@ -55,8 +55,11 @@ p-image{
   overflow-y: auto; /* Allow content area to scroll if needed */
 }
 
-.app-content {
+.app-content { /* Target the <main> element */
+  position: relative; /* Needed for absolute positioning of animating children */
+  overflow: hidden; /* Prevent scrollbars during animation if children overflow */
   flex-grow: 1;
+  /* overflow-y: auto; */ /* You might need this back depending on content */
 }
 
 

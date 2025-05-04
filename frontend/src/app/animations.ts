@@ -1,6 +1,6 @@
 import { trigger, transition, style, query, animate } from '@angular/animations';
 
-export const routeFadeAnimation =
+export const routeAnimation =
   trigger('routeAnimations', [
     transition('* <=> *', [ // Apply to all route transitions
       query(':enter', [ // Target the component being added

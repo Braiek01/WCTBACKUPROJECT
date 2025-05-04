@@ -6,7 +6,7 @@ import { LoaderComponent } from './startingUI/loader/loader.component'; // Impor
 import { ButtonModule } from 'primeng/button';
 import {StyleClassModule} from 'primeng/styleclass';
 import { NavbarComponent } from '../components/navbar/navbar.component';
-import { routeFadeAnimation } from './animations'; // Import the animation trigger
+import { routeAnimation } from './animations'; // Correct the import name to match the definition
 
 @Component({
     selector: 'app-root',
@@ -21,7 +21,7 @@ import { routeFadeAnimation } from './animations'; // Import the animation trigg
         StyleClassModule,
         NavbarComponent // Use NavbarComponent
     ],
-    animations: [ routeFadeAnimation ] // Add the animations array here
+    animations: [ routeAnimation ] // Use the correct trigger name here
 })
 export class AppComponent implements OnInit { // Implement OnInit
   title = 'backupfront';
@@ -45,8 +45,10 @@ export class AppComponent implements OnInit { // Implement OnInit
 
   // Updated prepareRoute function to return empty string instead of null
   prepareRoute(outlet: RouterOutlet) {
-    // Ensure we check outlet and activatedRouteData safely
-    return outlet?.activatedRouteData ? outlet.activatedRouteData['animation'] : '';
+    if (this.showLoader) {
+      return '';
+    }
+    return outlet?.activatedRouteData?.['animation'] ?? '';
   }
 
   // Alternative: Trigger change detection manually (Use with caution)

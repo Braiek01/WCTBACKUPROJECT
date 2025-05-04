@@ -18,10 +18,3 @@
     opacity: 0; /* Start hidden, animation will make it visible */
   }
   
-  /* Optional: Add staggered delay for child elements if needed */
-  .fade-in-on-load > * {
-    /* Example: Apply animation with delay to direct children */
-    /* animation: fadeIn 0.6s ease-out 0.1s forwards; */
-    /* opacity: 0; */
-  }
-  

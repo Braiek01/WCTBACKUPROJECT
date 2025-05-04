@@ -94,8 +94,8 @@
 <div class="app-layout" [class.content-hidden]="showLoader">
   <div class="app-layout-content">
     <app-navbar></app-navbar>
-    <!-- Ensure animation trigger name matches -->
-    <main class="app-content p-4" [@routeFadeAnimation]="prepareRoute(outlet)">
+    <!-- Change the binding to use the correct trigger name -->
+    <main class="app-content p-4" [@routeAnimations]="prepareRoute(outlet)">
       <router-outlet #outlet="outlet"></router-outlet>
     </main>
   </div>
