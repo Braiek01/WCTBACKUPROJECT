@@ -10,12 +10,12 @@ export const routes: Routes = [
     { title:'Whitecape Backup Service | Home ', path:'', component: LandingpageComponent, data: { animation: 'HomePage' } },
     { title:'Whitecape Backup Service | Signup' , path:'signup', component: SignupComponent, data: { animation: 'SignupPage' } },
     { title:'Whitecape Backup Service | Login' , path:'login', component: LoginComponent, data: { animation: 'LoginPage' } },
-    //{
-     // title:'Whitecape Backup Service | Dashboard',
-      //path:'dashboard',
-      //loadComponent: () => import('./startingUI/dashboard/dashboard.component').then(c => c.DashboardComponent),
-      //data: { animation: 'DashboardPage' }
-    //},
+    {
+      title:'Whitecape Backup Service | Dashboard',
+      path:'dashboard',
+      loadComponent: () => import('./startingUI/dashboard/dashboard.component').then(c => c.DashboardComponent),
+      data: { animation: 'DashboardPage' }
+    },
     //{ title:'Whitecape Backup Service | Users' , path:'users', component: UsersComponent, data: { animation: 'UsersPage' } },
     //{ path: 'users/:username', component: UserDetailsComponent, data: { animation: 'UserDetailsPage' } },
 ];

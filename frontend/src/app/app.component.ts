@@ -1,7 +1,7 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core'; // Import ChangeDetectorRef
 import { RouterOutlet } from '@angular/router';
 import { CommonModule } from '@angular/common'; // Import CommonModule
-//import { LoaderComponent } from './startingUI/loader/loader.component'; // Import LoaderComponent
+import { LoaderComponent } from './startingUI/loader/loader.component'; // Import LoaderComponent
 
 import { ButtonModule } from 'primeng/button';
 import {StyleClassModule} from 'primeng/styleclass';
@@ -16,7 +16,7 @@ import { routeFadeAnimation } from './animations'; // Import the animation trigg
     imports: [
         CommonModule, // Add CommonModule
         RouterOutlet,
-       // LoaderComponent, // Add LoaderComponent
+        LoaderComponent, // Add LoaderComponent
         ButtonModule,
         StyleClassModule,
         NavbarComponent // Use NavbarComponent

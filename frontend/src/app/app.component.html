@@ -86,11 +86,16 @@
     }
   }
 </style>
-<!--app-loader *ngIf="showLoader" [visible]="loaderVisible"></app-loader-->
-<div *ngIf="!showLoader" class="app-layout">
+
+<!-- Loader Component -->
+<app-loader *ngIf="showLoader" [visible]="loaderVisible"></app-loader>
+
+<!-- Main Application Layout - Always present, hidden via CSS class -->
+<div class="app-layout" [class.content-hidden]="showLoader">
   <div class="app-layout-content">
     <app-navbar></app-navbar>
-    <main class="app-content p-4" [@routeAnimations]="prepareRoute(outlet)">
+    <!-- Ensure animation trigger name matches -->
+    <main class="app-content p-4" [@routeFadeAnimation]="prepareRoute(outlet)">
       <router-outlet #outlet="outlet"></router-outlet>
     </main>
   </div>
