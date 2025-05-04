@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,21 +26,84 @@ SECRET_KEY = 'django-insecure-!%z9+rx7(3)_^!!)9=#sypp-bc^0ehe7)o)r+$$z2*4$%l+b))
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '.localhost,127.0.0.1').split(',')
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    'django_tenants',# Must be before django.contrib.contenttypes
+    'tenants'  ,                # Your tenant app
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # Third-party apps
+     'rest_framework',
+     'rest_framework_simplejwt',
+     'corsheaders',
+     'drf_yasg',
+     'django_celery_beat',
+     'django_filters',
+     'django_extensions',
+     'storages',
+     'django_redis',
+     # Project apps
+     'accounts',
+    
 ]
 
+
+# Multi-tenancy configuration
+SHARED_APPS = [
+    'django_tenants',  # Must be before django.contrib.contenttypes
+    'tenants',          # Your tenant app
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    # Third-party apps
+     'drf_yasg',
+     'django_celery_beat',
+     'django_filters',
+     'django_extensions',
+     'storages',
+     'django_redis', 
+
+    'accounts',
+    'rest_framework',
+    'corsheaders',
+]
+
+
+
+
+TENANT_MODEL = "tenants.Tenant"
+TENANT_DOMAIN_MODEL = "tenants.Domain"
+DATABASE_ROUTERS = (
+    'django_tenants.routers.TenantSyncRouter',
+)
+
+TENANT_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'accounts',
+]
+
+INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
+
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
+    # Use the main tenant middleware
+    'django_tenants.middleware.main.TenantMainMiddleware', 
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -50,6 +114,14 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'backup_system.urls'
+PUBLIC_SCHEMA_URLCONF = 'backup_system.urls'
+# CORS Configuration
+# for linking the angular front
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:4200", # Your Angular dev server
+    # Add your production frontend URL here later
+]
+
 
 TEMPLATES = [
     {
@@ -75,8 +147,12 @@ WSGI_APPLICATION = 'backup_system.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django_tenants.postgresql_backend',
+        'NAME': 'djangobackend', #change it databasename
+        'USER': 'postgres', #change it database user name
+        'PASSWORD': 'postgres', # change user database password
+        'HOST': 'localhost',  
+        'PORT': '5432',
     }
 }
 
@@ -99,6 +175,8 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+PUBLIC_SCHEMA_NAME = 'public'
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
@@ -116,8 +194,61 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 STATIC_URL = 'static/'
+# Add STATIC_ROOT for collectstatic if needed for production
+# STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Custom User Model
+AUTH_USER_MODEL = 'accounts.User'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# REST Framework Settings
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        # Use the custom authentication class
+        'accounts.authentication.PublicSchemaJWTAuthentication',
+        # You might keep others if needed, but this should be primary for JWT
+        # 'rest_framework.authentication.SessionAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+  
+}
+
+# Simple JWT Settings (customize lifetimes, etc.)
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15), # Adjust as needed
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'UPDATE_LAST_LOGIN': True,
+
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY, # Use Django's secret key for signing
+    'VERIFYING_KEY': None,
+    'AUDIENCE': None,
+    'ISSUER': None,
+    'JWK_URL': None,
+    'LEEWAY': 0,
+
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
+
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
+
+    'JTI_CLAIM': 'jti',
+
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
+}
