@@ -1,0 +1,9 @@
+:host {
+    display: block;
+  }
+  
+  /* Ensure table message column doesn't wrap too aggressively */
+  :host ::ng-deep .p-datatable .p-datatable-tbody > tr > td:last-child {
+    white-space: normal; /* Allow wrapping */
+    word-break: break-word; /* Break long words if necessary */
+  }

@@ -265,7 +265,7 @@
 <!-- Job Report Dialog -->
 <p-dialog header="Job Report" [(visible)]="displayJobReportDialog" [modal]="true" [style]="{width: '80vw', height: '90vh'}" [maximizable]="true" [draggable]="false" [resizable]="true" (onHide)="selectedJobForReport = null">
     <!-- Render the job report component inside the dialog -->
-    <!--app-job-report *ngIf="selectedJobForReport" [job]="selectedJobForReport"></app-job-report-->
+    <app-job-report *ngIf="selectedJobForReport" [job]="selectedJobForReport"></app-job-report>
     <!-- Optional: Add footer buttons if needed -->
     <!--
     <ng-template pTemplate="footer">

@@ -19,6 +19,7 @@ import { ToolbarModule } from 'primeng/toolbar'; // <-- Add ToolbarModule
 import { CheckboxModule } from 'primeng/checkbox'; // <-- Add CheckboxModule
 import { TagModule } from 'primeng/tag'; // <-- Add TagModule for status
 import { DialogModule } from 'primeng/dialog'; // <-- Add DialogModule
+import { JobReportComponent } from '../job-report/job-report.component';
 
 import { ProgressBarModule } from 'primeng/progressbar'; // <-- Add ProgressBarModule
 
@@ -42,7 +43,7 @@ import { ProgressBarModule } from 'primeng/progressbar'; // <-- Add ProgressBarM
     CheckboxModule, // <-- Add
     TagModule, // <-- Add
     DialogModule, // <-- Add DialogModule
-
+    JobReportComponent, // <-- Add JobReportComponent
     ProgressBarModule // <-- Add ProgressBarModule
   ],
   templateUrl: './user-details.component.html',

@@ -1,0 +1,102 @@
+<div class="job-report-container p-4 surface-ground"> <!-- Use surface-ground or surface-section -->
+
+    <!-- Header/Breadcrumb -->
+    <div class="flex align-items-center mb-4">
+        <i class="pi pi-briefcase mr-2 text-xl"></i>
+        <span class="text-xl text-secondary cursor-pointer hover:underline">Job Logs</span> <!-- Make clickable if needed -->
+        <i class="pi pi-angle-right mx-2 text-xl"></i>
+        <h2 class="text-xl font-semibold mb-0">Report</h2>
+    </div>
+
+    <!-- Progress Bar -->
+    <p-progressBar [value]="progressValue" styleClass="mb-4 h-1rem"></p-progressBar>
+
+    <!-- Job Summary Details -->
+    <div class="grid mb-4 text-sm">
+        <!-- Left Column -->
+        <div class="col-12 md:col-6">
+            <div class="mb-2"><span class="font-medium text-color-secondary mr-2">Username:</span> <a href="#" class="text-primary hover:underline">{{ jobDetails.username }}</a></div>
+            <div class="mb-2"><span class="font-medium text-color-secondary mr-2">Type:</span> {{ jobDetails.type }}</div>
+            <div class="mb-2"><span class="font-medium text-color-secondary mr-2">Status:</span> <p-tag [value]="jobDetails.status" [severity]="jobDetails.status === 'Success' ? 'success' : (jobDetails.status === 'Failed' ? 'danger' : 'info')"></p-tag></div>
+            <div class="mb-2"><span class="font-medium text-color-secondary mr-2">Started:</span> {{ jobDetails.started | date:'yyyy-MM-dd HH:mm:ss' }}</div>
+            <div class="mb-2"><span class="font-medium text-color-secondary mr-2">Stopped:</span> {{ jobDetails.stopped | date:'yyyy-MM-dd HH:mm:ss' }}</div>
+            <div class="mb-2"><span class="font-medium text-color-secondary mr-2">Duration:</span> {{ jobDetails.duration }}</div>
+            <div class="mb-2"><span class="font-medium text-color-secondary mr-2">Protected Item:</span> {{ jobDetails.protectedItem }}</div>
+            <div class="mb-2"><span class="font-medium text-color-secondary mr-2">Storage Vault:</span> {{ jobDetails.storageVault }}</div>
+        </div>
+        <!-- Right Column -->
+        <div class="col-12 md:col-6">
+            <div class="mb-2"><span class="font-medium text-color-secondary mr-2">Account Name:</span> "{{ jobDetails.accountName }}"</div>
+            <div class="mb-2"><span class="font-medium text-color-secondary mr-2">Device:</span> {{ jobDetails.device }}</div>
+            <div class="mb-2"><span class="font-medium text-color-secondary mr-2">Total Size:</span> {{ jobDetails.totalSize }}</div>
+            <div class="mb-2"><span class="font-medium text-color-secondary mr-2">Files:</span> {{ jobDetails.files }}</div>
+            <div class="mb-2"><span class="font-medium text-color-secondary mr-2">Directories:</span> {{ jobDetails.directories }}</div>
+            <div class="mb-2"><span class="font-medium text-color-secondary mr-2">Uploaded:</span> {{ jobDetails.uploaded }}</div>
+            <div class="mb-2"><span class="font-medium text-color-secondary mr-2">Downloaded:</span> {{ jobDetails.downloaded }}</div>
+            <div class="mb-2"><span class="font-medium text-color-secondary mr-2">Version:</span> {{ jobDetails.version }}</div>
+        </div>
+    </div>
+
+    <!-- Tabs for Report/Files -->
+    <p-tabView>
+        <p-tabPanel header="Report" leftIcon="pi pi-list">
+            <ng-template pTemplate="content">
+                <!-- Log Messages Toolbar -->
+                <p-toolbar styleClass="mb-4">
+                    <ng-template pTemplate="left">
+                        <div class="flex align-items-center gap-2">
+                            <label for="logRows" class="text-sm">Show</label>
+                            <p-dropdown inputId="logRows" [options]="logRowsPerPageOptions" [(ngModel)]="selectedLogRowsPerPage" optionLabel="label" optionValue="value" styleClass="p-inputtext-sm"></p-dropdown>
+                            <span class="text-sm">entries</span>
+                        </div>
+                    </ng-template>
+                    <ng-template pTemplate="right">
+                        <div class="flex align-items-center gap-2">
+                            <span class="p-input-icon-left">
+                                <i class="pi pi-search"></i>
+                                <input pInputText type="text" #logFilterInput (input)="applyLogFilter(logDt, $event)" [(ngModel)]="logFilterValue" placeholder="Filter..." class="p-inputtext-sm" />
+                            </span>
+                            <p-splitButton label="Export" icon="pi pi-upload" [model]="logExportItems" styleClass="p-button-secondary p-button-sm"></p-splitButton>
+                            <p-splitButton label="View" icon="pi pi-eye" [model]="logViewItems" styleClass="p-button-secondary p-button-sm"></p-splitButton>
+                        </div>
+                    </ng-template>
+                </p-toolbar>
+
+                <!-- Log Messages Table -->
+                <p-table #logDt [value]="logMessages" dataKey="time" [rows]="selectedLogRowsPerPage" [paginator]="logMessages.length > selectedLogRowsPerPage" [rowsPerPageOptions]="[10, 25, 50, 100]" styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll" [globalFilterFields]="['message', 'type']">
+                    <ng-template pTemplate="header">
+                        <tr>
+                            <th pSortableColumn="time" style="width: 25%;">Time <p-sortIcon field="time"></p-sortIcon></th>
+                            <th pSortableColumn="type" style="width: 15%;">Type <p-sortIcon field="type"></p-sortIcon></th>
+                            <th pSortableColumn="message">Message <p-sortIcon field="message"></p-sortIcon></th>
+                        </tr>
+                    </ng-template>
+                    <ng-template pTemplate="body" let-log>
+                        <tr>
+                            <td>{{ log.time | date:'yyyy-MM-dd HH:mm:ss' }}</td>
+                            <td>
+                                <p-tag [value]="log.type" [severity]="log.type === 'Error' ? 'danger' : (log.type === 'Warning' ? 'warn' : 'info')"></p-tag>
+                            </td>
+                            <td>{{ log.message }}</td>
+                        </tr>
+                    </ng-template>
+                    <ng-template pTemplate="emptymessage">
+                        <tr>
+                            <td colspan="3">No log messages found for this job.</td>
+                        </tr>
+                    </ng-template>
+                     <ng-template pTemplate="summary">
+                        Showing {{ (logDt.first ?? 0) + 1 }} to {{ (logDt.first ?? 0) + (logDt.rows ?? 0) > logMessages.length ? logMessages.length : (logDt.first ?? 0) + (logDt.rows ?? 0) }} of {{ logMessages.length }} entries
+                    </ng-template>
+                </p-table>
+            </ng-template>
+        </p-tabPanel>
+        <p-tabPanel header="Files" leftIcon="pi pi-file">
+            <ng-template pTemplate="content">
+                <!-- Content for Files tab goes here -->
+                <p>Files details will be displayed here.</p>
+            </ng-template>
+        </p-tabPanel>
+    </p-tabView>
+
+</div>
