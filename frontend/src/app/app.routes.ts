@@ -4,7 +4,7 @@ import { SignupComponent } from './startingUI/signup/signup.component';
 import { LoginComponent } from './startingUI/login/login.component';
 
 import { UsersComponent } from './tenantUI/users/users.component';
-//import { UserDetailsComponent } from './admintenantuicomponents/user-details/user-details.component';
+import { UserDetailsComponent } from './tenantUI/user-details/user-details.component';
 
 export const routes: Routes = [
     { title:'Whitecape Backup Service | Home ', path:'', component: LandingpageComponent, data: { animation: 'HomePage' } }, // Example
@@ -17,6 +17,6 @@ export const routes: Routes = [
       data: { animation: 'DashboardPage' } // Example
     },
     { title:'Whitecape Backup Service | Users' , path:'users', component: UsersComponent, data: { animation: 'UsersPage' } },
-    //{ path: 'users/:username', component: UserDetailsComponent, data: { animation: 'UserDetailsPage' } },
-    // ... ensure ALL other navigable routes have unique animation data ...
+   
+    { path: 'users/:username', component: UserDetailsComponent, data: { animation: 'UserDetailsPage' } },
 ];

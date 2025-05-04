@@ -1,0 +1,275 @@
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
+
+<!-- Confirmation Dialog -->
+<p-confirmDialog [style]="{width: '450px'}"></p-confirmDialog>
+<!-- Toast for messages -->
+<p-toast></p-toast>
+
+<!-- Remove px-4 py-2 from this div -->
+<div class="surface-ground">
+    <!-- Header -->
+    <div class="flex align-items-center justify-content-between mb-4 px-4 pt-2"> <!-- Add padding here if needed for inner content -->
+        <div class="flex align-items-center">
+            <!-- Breadcrumb style navigation -->
+            <i class="pi pi-users mr-2 text-xl"></i>
+            <a routerLink="/users" class="text-primary hover:underline cursor-pointer text-xl">Users</a>
+            <i class="pi pi-angle-right mx-2 text-xl"></i>
+            <h2 class="text-xl font-semibold mb-0">{{ username }}</h2>
+        </div>
+        <div class="flex gap-2">
+            <button pButton pRipple label="Save changes" icon="pi pi-save" class="p-button-success" (click)="saveChanges()"></button>
+            <p-splitButton label="Actions" icon="pi pi-cog" [model]="actionItems" styleClass="p-button-secondary" appendTo="div"></p-splitButton>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <!-- Add padding/margin to the card if needed -->
+    <div class="card mx-4 mb-2">
+        <p-tabView>
+            <p-tabPanel header="Profile">
+                <ng-template pTemplate="content">
+                    <div class="p-fluid grid formgrid p-3">
+
+                        <!-- User Details Section -->
+                        <div class="field col-12 md:col-4">
+                            <h4 class="mb-3 font-semibold">User Details</h4>
+                            <div class="field mb-3">
+                                <label for="accountName" class="block mb-1 text-sm">Account Name</label>
+                                <input pInputText id="accountName" [(ngModel)]="accountName" />
+                            </div>
+                            <div class="field mb-3">
+                                <label for="userGroup" class="block mb-1 text-sm">User Group</label>
+                                <input pInputText id="userGroup" [(ngModel)]="userGroup" />
+                            </div>
+                            <div class="field mb-3">
+                                <label for="usernameDetail" class="block mb-1 text-sm">Username</label>
+                                <input pInputText id="usernameDetail" [value]="username" disabled /> <!-- Display username, usually not editable -->
+                            </div>
+                            <div class="field mb-3">
+                                <label for="passwordDetail" class="block mb-1 text-sm">Password</label>
+                                <input pInputText id="passwordDetail" [placeholder]="passwordPlaceholder" disabled />
+                            </div>
+                            <div class="field flex align-items-center mb-3">
+                                <p-inputSwitch [(ngModel)]="allowAdminReset" inputId="allowReset"></p-inputSwitch>
+                                <label for="allowReset" class="ml-2 text-sm">Allow administrator to reset password</label>
+                            </div>
+                            <div class="field flex align-items-center mb-3">
+                                <p-inputSwitch [(ngModel)]="requireChangeOnLogin" inputId="requireChange"></p-inputSwitch>
+                                <label for="requireChange" class="ml-2 text-sm">Require user to change password at next login</label>
+                            </div>
+                            <div class="field mb-3">
+                                <label class="block mb-1 text-sm">Created:</label>
+                                <span class="text-sm">{{ createdDate }}</span>
+                            </div>
+                            <div class="field mb-3">
+                                 <label for="autoCreateVaults" class="block mb-1 text-sm">Automatically create Storage Vaults for newly registered devices:</label>
+                                 <input pInputText id="autoCreateVaults" [(ngModel)]="autoCreateVaults" /> <!-- Could be a dropdown -->
+                            </div>
+                            <!-- Add Quota section here if needed -->
+                        </div>
+
+                        <!-- Localization Section -->
+                        <div class="field col-12 md:col-4">
+                            <h4 class="mb-3 font-semibold">Localization</h4>
+                            <div class="field mb-3">
+                                <label for="language" class="block mb-1 text-sm">Language</label>
+                                <p-dropdown id="language" [options]="languageOptions" [(ngModel)]="language" optionLabel="label" optionValue="value"></p-dropdown>
+                            </div>
+                            <div class="field mb-3">
+                                <label for="timezone" class="block mb-1 text-sm">Timezone</label>
+                                <p-dropdown id="timezone" [options]="timezoneOptions" [(ngModel)]="timezone" optionLabel="label" optionValue="value" [filter]="true" filterBy="label"></p-dropdown>
+                                <small class="block mt-1 text-600 text-sm">The timezone will be set automatically when a device logs in.</small>
+                            </div>
+                        </div>
+
+                        <!-- Reporting Section -->
+                        <div class="field col-12 md:col-4">
+                            <h4 class="mb-3 font-semibold">Reporting</h4>
+                            <div class="field mb-3">
+                                <label for="emailAddressDetail" class="block mb-1 text-sm">Email Address</label>
+                                <input pInputText id="emailAddressDetail" [(ngModel)]="emailAddress" />
+                                <!-- Add Reports list/management here if needed -->
+                            </div>
+                            <div class="field flex align-items-center mb-3">
+                                <p-inputSwitch [(ngModel)]="emailBackupReports" inputId="emailBackupReports"></p-inputSwitch>
+                                <label for="emailBackupReports" class="ml-2 text-sm">Email backup reports to this account:</label>
+                            </div>
+                            <div class="field flex align-items-center mb-3">
+                                <p-inputSwitch [(ngModel)]="emailServiceBulletins" inputId="emailServiceBulletins"></p-inputSwitch>
+                                <label for="emailServiceBulletins" class="ml-2 text-sm">Email service bulletins to this account:</label>
+                                <small class="block mt-1 text-600 text-sm">Service bulletins are always enabled.</small>
+                            </div>
+                        </div>
+
+                    </div>
+                </ng-template>
+            </p-tabPanel>
+            <p-tabPanel header="Backups"> <!-- Changed from "Protected Items" -->
+                <ng-template pTemplate="content">
+                    Content for Backups goes here. <!-- Updated text -->
+                </ng-template>
+            </p-tabPanel>
+            <p-tabPanel header="Storage Vaults">
+                 <ng-template pTemplate="content">
+                    <!-- Storage Vaults Toolbar -->
+                    <p-toolbar styleClass="mb-4">
+                        <ng-template pTemplate="left">
+                            <div class="flex align-items-center gap-2">
+                                <label for="svRows" class="text-sm">Show</label>
+                                <p-dropdown inputId="svRows" [options]="storageVaultRowsPerPageOptions" [(ngModel)]="selectedStorageVaultRowsPerPage" optionLabel="label" optionValue="value" styleClass="p-inputtext-sm"></p-dropdown>
+                                <span class="text-sm">entries</span>
+                            </div>
+                        </ng-template>
+
+                        <ng-template pTemplate="right">
+                            <div class="flex align-items-center gap-2">
+                                <span class="p-input-icon-left">
+                                    <i class="pi pi-search"></i>
+                                    <input pInputText type="text" #svFilterInput (input)="applyStorageVaultFilter(svDt, $event)" [(ngModel)]="storageVaultFilterValue" placeholder="Filter..." class="p-inputtext-sm" />
+                                </span>
+                                <button pButton pRipple label="Add new vault..." icon="pi pi-plus" class="p-button-success p-button-sm" (click)="addNewVault()"></button>
+                                <p-splitButton label="Export" icon="pi pi-upload" [model]="storageVaultExportItems" styleClass="p-button-secondary p-button-sm"></p-splitButton>
+                                <p-splitButton label="View" icon="pi pi-eye" [model]="storageVaultViewItems" styleClass="p-button-secondary p-button-sm"></p-splitButton>
+                            </div>
+                        </ng-template>
+                    </p-toolbar>
+
+                    <!-- Storage Vaults Table -->
+                    <p-table #svDt [value]="storageVaults" dataKey="id" [rows]="selectedStorageVaultRowsPerPage" [paginator]="storageVaults.length > selectedStorageVaultRowsPerPage" [rowsPerPageOptions]="[10, 25, 50, 100]" styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll" [globalFilterFields]="['name', 'type']">
+                        <ng-template pTemplate="header">
+                            <tr>
+                                <!-- Add checkbox if selection is needed -->
+                                <!-- <th style="width: 3rem"><p-checkbox></p-checkbox></th> -->
+                                <th pSortableColumn="name">Storage Vault <p-sortIcon field="name"></p-sortIcon></th>
+                                <th pSortableColumn="type">Type <p-sortIcon field="type"></p-sortIcon></th>
+                                <th pSortableColumn="initialized">Initialized <p-sortIcon field="initialized"></p-sortIcon></th>
+                                <th pSortableColumn="stored">Stored <p-sortIcon field="stored"></p-sortIcon></th>
+                                <th pSortableColumn="quota">Quota <p-sortIcon field="quota"></p-sortIcon></th>
+                                <th pSortableColumn="quotaUsage">Quota Usage <p-sortIcon field="quotaUsage"></p-sortIcon></th>
+                                <th>Actions</th>
+                            </tr>
+                        </ng-template>
+                        <ng-template pTemplate="body" let-vault>
+                            <tr>
+                                <!-- Add checkbox if selection is needed -->
+                                <!-- <td><p-checkbox [(ngModel)]="selectedStorageVaults" [value]="vault"></p-checkbox></td> -->
+                                <td>{{vault.name}}</td>
+                                <td><i [class]="vault.typeIcon + ' mr-2'"></i>{{vault.type}}</td>
+                                <td>{{vault.initialized}}</td>
+                                <td>{{vault.stored}}</td>
+                                <td>{{vault.quota}}</td>
+                                <td>
+                                    <p-progressBar [value]="vault.quotaUsage" [showValue]="true" styleClass="h-1rem"></p-progressBar>
+                                </td>
+                                <td>
+                                    <button pButton pRipple label="Delete" icon="pi pi-trash" class="p-button-danger p-button-sm" (click)="deleteStorageVault(vault)"></button>
+                                </td>
+                            </tr>
+                        </ng-template>
+                        <ng-template pTemplate="emptymessage">
+                            <tr>
+                                <td [attr.colspan]="7">No storage vaults found for this user.</td> <!-- Adjust colspan -->
+                            </tr>
+                        </ng-template>
+                        <ng-template pTemplate="summary">
+                            Showing {{ (svDt.first ?? 0) + 1 }} to {{ (svDt.first ?? 0) + (svDt.rows ?? 0) > storageVaults.length ? storageVaults.length : (svDt.first ?? 0) + (svDt.rows ?? 0) }} of {{ storageVaults.length }} entries
+                        </ng-template>
+                    </p-table>
+                 </ng-template>
+            </p-tabPanel>
+             <p-tabPanel header="Connected Servers"> <!-- Changed from "Devices" -->
+                 <ng-template pTemplate="content">
+                    Content for Connected Servers goes here. <!-- Updated text -->
+                </ng-template>
+            </p-tabPanel>
+             <p-tabPanel header="Policies">
+                 <ng-template pTemplate="content">
+                    Content for Policies goes here.
+                </ng-template>
+            </p-tabPanel>
+             <p-tabPanel header="Job Logs">
+                 <ng-template pTemplate="content">
+                    <!-- Job Logs Toolbar -->
+                    <p-toolbar styleClass="mb-4">
+                        <ng-template pTemplate="left">
+                            <div class="flex align-items-center gap-2">
+                                <label for="jobLogRows" class="text-sm">Show</label>
+                                <p-dropdown inputId="jobLogRows" [options]="jobLogRowsPerPageOptions" [(ngModel)]="selectedJobLogRowsPerPage" optionLabel="label" optionValue="value" styleClass="p-inputtext-sm"></p-dropdown>
+                                <span class="text-sm">entries</span>
+                            </div>
+                        </ng-template>
+
+                        <ng-template pTemplate="right">
+                            <div class="flex align-items-center gap-2">
+                                <!-- User Filter (Display Only for now) -->
+                                <input pInputText type="text" [value]="username" placeholder="Filter by user" class="p-inputtext-sm" disabled />
+                                <p-splitButton label="Export Selected" icon="pi pi-upload" [model]="jobLogExportItems" styleClass="p-button-secondary p-button-sm" [disabled]="!selectedJobLogs || selectedJobLogs.length === 0"></p-splitButton>
+                                <p-splitButton label="View" icon="pi pi-eye" [model]="jobLogViewItems" styleClass="p-button-secondary p-button-sm"></p-splitButton>
+                            </div>
+                        </ng-template>
+                    </p-toolbar>
+
+                    <!-- Job Logs Table -->
+                    <p-table #jobLogDt [value]="jobLogs" [(selection)]="selectedJobLogs" dataKey="id" [rows]="selectedJobLogRowsPerPage" [paginator]="jobLogs.length > selectedJobLogRowsPerPage" [rowsPerPageOptions]="[10, 25, 50, 100]" styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll">
+                        <ng-template pTemplate="header">
+                            <tr>
+                                <th style="width: 3rem"><p-checkbox [(ngModel)]="selectedJobLogs" [value]="jobLogs" [binary]="true"></p-checkbox></th>
+                                <th pSortableColumn="device">Device <p-sortIcon field="device"></p-sortIcon></th>
+                                <th pSortableColumn="protectedItem">Protected Item <p-sortIcon field="protectedItem"></p-sortIcon></th>
+                                <th pSortableColumn="type">Type <p-sortIcon field="type"></p-sortIcon></th>
+                                <th pSortableColumn="status">Status <p-sortIcon field="status"></p-sortIcon></th>
+                                <th pSortableColumn="files">Files <p-sortIcon field="files"></p-sortIcon></th>
+                                <th pSortableColumn="size">Size <p-sortIcon field="size"></p-sortIcon></th>
+                                <th pSortableColumn="uploaded">Uploaded <p-sortIcon field="uploaded"></p-sortIcon></th>
+                                <th pSortableColumn="downloaded">Downloaded <p-sortIcon field="downloaded"></p-sortIcon></th>
+                                <th pSortableColumn="started">Started <p-sortIcon field="started"></p-sortIcon></th>
+                                <th pSortableColumn="duration">Duration <p-sortIcon field="duration"></p-sortIcon></th>
+                                <th>Actions</th>
+                            </tr>
+                        </ng-template>
+                        <ng-template pTemplate="body" let-job>
+                            <tr>
+                                <td><p-checkbox [(ngModel)]="selectedJobLogs" [value]="job"></p-checkbox></td>
+                                <td>{{job.device}}</td>
+                                <td>{{job.protectedItem}}</td>
+                                <td>{{job.type}}</td>
+                                <td><p-tag [value]="job.status" [severity]="job.status === 'Success' ? 'success' : (job.status === 'Failed' ? 'danger' : 'info')"></p-tag></td>
+                                <td>{{job.files}}</td>
+                                <td>{{job.size}}</td>
+                                <td>{{job.uploaded}}</td>
+                                <td>{{job.downloaded}}</td>
+                                <td>{{job.started | date:'yyyy-MM-dd HH:mm:ss'}}</td> <!-- Format date -->
+                                <td>{{job.duration}}</td>
+                                <td>
+                                    <button pButton pRipple icon="pi pi-file" class="p-button-rounded p-button-info p-button-text" (click)="viewJobReport(job)" pTooltip="View Report" tooltipPosition="top"></button>
+                                </td>
+                            </tr>
+                        </ng-template>
+                        <ng-template pTemplate="emptymessage">
+                            <tr>
+                                <td [attr.colspan]="12">No job logs found for this user.</td> <!-- Adjust colspan -->
+                            </tr>
+                        </ng-template>
+                        <ng-template pTemplate="summary">
+                            Showing {{ (jobLogDt.first ?? 0) + 1 }} to {{ (jobLogDt.first ?? 0) + (jobLogDt.rows ?? 0) > jobLogs.length ? jobLogs.length : (jobLogDt.first ?? 0) + (jobLogDt.rows ?? 0) }} of {{ jobLogs.length }} entries
+                        </ng-template>
+                    </p-table>
+                </ng-template>
+             </p-tabPanel>
+            <!-- Add other tabs as needed -->
+        </p-tabView>
+    </div> <!-- End of <div class="card"> -->
+</div> <!-- End of <div class="surface-ground"> -->
+
+<!-- Job Report Dialog -->
+<p-dialog header="Job Report" [(visible)]="displayJobReportDialog" [modal]="true" [style]="{width: '80vw', height: '90vh'}" [maximizable]="true" [draggable]="false" [resizable]="true" (onHide)="selectedJobForReport = null">
+    <!-- Render the job report component inside the dialog -->
+    <!--app-job-report *ngIf="selectedJobForReport" [job]="selectedJobForReport"></app-job-report-->
+    <!-- Optional: Add footer buttons if needed -->
+    <!--
+    <ng-template pTemplate="footer">
+        <button pButton pRipple label="Close" icon="pi pi-times" class="p-button-text" (click)="displayJobReportDialog=false"></button>
+    </ng-template>
+    -->
+</p-dialog>
