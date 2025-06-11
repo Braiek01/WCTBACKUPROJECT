@@ -91,9 +91,9 @@
 <app-loader *ngIf="showLoader" [visible]="loaderVisible"></app-loader>
 
 <!-- Main Application Layout - Always present, hidden via CSS class -->
+<p-toast></p-toast>
 <div class="app-layout" [class.content-hidden]="showLoader">
   <div class="app-layout-content">
-    <app-navbar></app-navbar>
     <!-- Change the binding to use the correct trigger name -->
     <main class="app-content p-4" [@routeAnimations]="prepareRoute(outlet)">
       <router-outlet #outlet="outlet"></router-outlet>
