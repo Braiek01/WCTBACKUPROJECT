@@ -1,19 +1,22 @@
-import { ApplicationConfig } from '@angular/core';
+import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
+import { provideHttpClient, withInterceptors, withFetch } from '@angular/common/http';
+import { provideAnimations } from '@angular/platform-browser/animations';
+import { MessageService } from 'primeng/api';
 import { providePrimeNG } from 'primeng/config';
 import Aura from '@primeng/themes/aura';
 
 import { routes } from './app.routes';
-import { provideHttpClient } from '@angular/common/http';
-import { MessageService } from 'primeng/api';
+import { authInterceptor } from './core/interceptors/auth.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
-      provideRouter(routes),
-      provideAnimationsAsync(),
-      providePrimeNG({ theme:{ preset: Aura }}),
-      provideHttpClient(),
-      MessageService
+    provideZoneChangeDetection({ eventCoalescing: true }),
+    provideRouter(routes),
+    provideAnimations(),
+    providePrimeNG({ theme:{ preset: Aura }}),
+    // Add withFetch() alongside your existing interceptor
+    provideHttpClient(withInterceptors([authInterceptor]), withFetch()),
+    MessageService
   ]
 };

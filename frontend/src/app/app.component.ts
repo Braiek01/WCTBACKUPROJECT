@@ -1,12 +1,12 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core'; // Import ChangeDetectorRef
+import { Component, OnInit, ChangeDetectorRef, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core'; // Import ChangeDetectorRef
 import { RouterOutlet } from '@angular/router';
 import { CommonModule } from '@angular/common'; // Import CommonModule
 import { LoaderComponent } from './startingUI/loader/loader.component'; // Import LoaderComponent
 
 import { ButtonModule } from 'primeng/button';
 import {StyleClassModule} from 'primeng/styleclass';
-import { NavbarComponent } from '../components/navbar/navbar.component';
 import { routeAnimation } from './animations'; // Correct the import name to match the definition
+import { ToastModule } from 'primeng/toast';
 
 @Component({
     selector: 'app-root',
@@ -19,9 +19,10 @@ import { routeAnimation } from './animations'; // Correct the import name to mat
         LoaderComponent, // Add LoaderComponent
         ButtonModule,
         StyleClassModule,
-        NavbarComponent // Use NavbarComponent
+        ToastModule// Use NavbarComponent
     ],
-    animations: [ routeAnimation ] // Use the correct trigger name here
+    animations: [ routeAnimation ],
+    schemas: [CUSTOM_ELEMENTS_SCHEMA] // Use the correct trigger name here
 })
 export class AppComponent implements OnInit { // Implement OnInit
   title = 'backupfront';
