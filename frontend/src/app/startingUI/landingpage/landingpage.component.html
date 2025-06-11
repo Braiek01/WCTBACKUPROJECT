@@ -1,156 +1,165 @@
 <link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">  
-    <link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css"> 
-    <!-- Hero Section -->
-    <div class="grid grid-nogutter surface-0 text-800">
-        <!-- Left Column: Text and Button -->
-        <div class="col-12 md:col-6 p-6 text-center md:text-left flex align-items-center">
-            <section>
-                <span class="block text-6xl font-bold mb-1 fade-text">Agentless, Secure Backup</span>
-                <div class="text-6xl text-primary font-bold mb-3 fade-text">Multi-Tenant & Encrypted</div>
-                <div class="text-6xl font-bold mb-3">
-                    <span class="fade-text-blue">Azure Cloud</span> &
-                    <span class="fade-text-green">Local Storage</span>
-                </div>
-                <p class="mt-0 mb-4 text-700 line-height-3">A robust platform for encrypted full, differential, and incremental backups & restores, leveraging Restic and Ansible.</p>
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css"> 
+<app-navbar></app-navbar>
 
-                <button pButton pRipple label="Get Started" type="button" class="mr-3 p-button-raised" severity="secondary" size="large"></button>
-                <button pButton pRipple label="Learn More" type="button" class="p-button-outlined" size="large"></button>
-            </section>
-        </div>
+<!-- Hero Section -->
+<div class="grid w-screen grid-nogutter surface-0 text-800">
+    <!-- Left Column: Text and Button -->
+    <div class="col-12 md:col-6 p-6 text-center md:text-left flex align-items-center">
+        <section>
+            <span class="block text-6xl font-bold mb-1 fade-text">Enterprise-Grade Backup</span>
+            <div class="text-6xl text-primary font-bold mb-3 fade-text">Secure & Multi-Tenant</div>
+            <div class="text-6xl font-bold mb-3">
+                <span class="fade-text-blue">Cloud-Ready</span> &
+                <span class="fade-text-green">On-Premises</span>
+            </div>
+            <p class="mt-0 mb-4 text-700 line-height-3">A comprehensive platform for managing encrypted backups with role-based access control, powered by Restic/Backrest with support for both cloud and local storage.</p>
 
-        <!-- Right Column: Illustration -->
-        <div class="col-12 md:col-6 overflow-hidden flex align-items-center justify-content-center p-4">
-            <img src="Macbook Mockup Front View UV.png" alt="Macbook Mockup Illustration" class="block" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-        </div>
+            <a href="/signup" class="p-button p-component p-button-raised p-button-secondary mr-3" style="font-size: 1.25rem; padding: 0.75rem 1.25rem;">
+                <span class="p-button-label">Get Started</span>
+            </a>
+            <a href="/overview" class="p-button p-component p-button-outlined" style="font-size: 1.25rem; padding: 0.75rem 1.25rem;">
+                <span class="p-button-label">Learn More</span>
+            </a>
+        </section>
     </div>
 
-    <!-- Section 1: Comprehensive Backup Solutions -->
-    <!-- Add #section and section-fade class -->
-    <div #section class="surface-section px-4 py-8 md:px-6 lg:px-8 section-fade">
-        <div class="grid align-items-center">
-            <!-- Image Column (Replaced Icon) -->
-            <div class="col-12 md:col-4 text-center md:text-left mb-4 md:mb-0">
-                <!-- Replaced <i> tag with <img> tag -->
-                <img src="/illustrationdb.png" alt="Database Illustration" style="max-width: 100%; height: auto; max-height: 350px;" class="block mx-auto md:mx-0"> <!-- Adjust max-height as needed -->
-            </div>
-            <!-- Text Column -->
-            <div class="col-12 md:col-8">
-                <div class="mb-3 font-bold text-3xl text-center md:text-left">
-                    <span class="text-900">Flexible & Secure Backup Strategies</span>
-                </div>
-                <div class="text-700 text-xl line-height-3 text-center md:text-left">Protect your critical data with agentless backups orchestrated via Ansible. We support full, differential, and Restic's efficient chunk-level incremental backups, all AES-256 encrypted client-side before leaving your server.</div>
-            </div>
-        </div>
+    <!-- Right Column: Illustration -->
+    <div class="col-12 md:col-6 overflow-hidden flex align-items-center justify-content-center p-4">
+        <img src="Macbook Mockup Front View UV.png" alt="Backup Dashboard Mockup" class="block" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
     </div>
+</div>
 
-    <!-- Section 2: Advanced Technology -->
-    <!-- Add #section and section-fade class -->
-    <div #section class="surface-ground px-4 py-8 md:px-6 lg:px-8 section-fade">
-        <div class="text-center font-bold text-3xl text-900 mb-3">Powered by Modern Technology</div>
-        <div class="text-center text-700 text-xl line-height-3 mb-6">Built on Django and Angular, leveraging powerful open-source tools like Restic for deduplication & encryption, Ansible for orchestration, and Celery for scheduling. Native Azure Blob storage integration included.</div>
-        <div class="grid">
-            <!-- Feature cards with icons -->
-            <div class="col-12 md:col-4 mb-4 px-5 text-center">
-                <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
-                    <i class="pi pi-copy text-4xl text-primary"></i>
-                </span>
-                <div class="text-900 text-xl mb-3 font-medium">Restic Deduplication</div>
-                <span class="text-700 line-height-3">Chunk-level deduplication significantly reduces storage space and bandwidth usage.</span>
+<!-- Section 1: Comprehensive Backup Solutions -->
+<div #section class="surface-section px-4 py-8 md:px-6 lg:px-8 section-fade">
+    <div class="grid align-items-center">
+        <!-- Image Column -->
+        <div class="col-12 md:col-4 text-center md:text-left mb-4 md:mb-0">
+            <img src="/illustrationdb.png" alt="Database Illustration" style="max-width: 100%; height: auto; max-height: 350px;" class="block mx-auto md:mx-0">
+        </div>
+        <!-- Text Column -->
+        <div class="col-12 md:col-8">
+            <div class="mb-3 font-bold text-3xl text-center md:text-left">
+                <span class="text-900">Multiple Backup Strategies</span>
             </div>
-            <div class="col-12 md:col-4 mb-4 px-5 text-center">
-                <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
-                    <i class="pi pi-cloud text-4xl text-primary"></i>
-                </span>
-                <div class="text-900 text-xl mb-3 font-medium">Azure Blob Integration</div>
-                <span class="text-700 line-height-3">Natively store encrypted backups securely and cost-effectively in Azure Blob Storage.</span>
-            </div>
-            <div class="col-12 md:col-4 mb-4 px-5 text-center">
-                <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
-                    <i class="pi pi-cog text-4xl text-primary"></i>
-                </span>
-                <div class="text-900 text-xl mb-3 font-medium">Ansible Orchestration</div>
-                <span class="text-700 line-height-3">Agentless operations managed via SSH using Ansible playbooks for reliability.</span>
+            <div class="text-700 text-xl line-height-3 text-center md:text-left">Choose the right backup approach for your needs. Our platform supports:</div>
+            <ul class="text-700 text-xl line-height-3 md:text-left pl-0 md:pl-4 mt-3">
+                <li class="mb-2"><b>Full Backups</b> - Complete point-in-time snapshots of your data</li>
+                <li class="mb-2"><b>Differential Backups</b> - Only changes since the last full backup</li>
+                <li class="mb-2"><b>Incremental (Restic)</b> - Efficient chunk-level backups with deduplication</li>
+            </ul>
+            <div class="text-700 text-xl line-height-3 text-center md:text-left mt-3">
+                All backups are encrypted using AES-256 before leaving your servers, ensuring complete data security.
             </div>
         </div>
     </div>
+</div>
 
-    <!-- Section 3: Platform Features -->
-    <!-- Add #section and section-fade class -->
-    <div #section class="surface-section px-4 py-8 md:px-6 lg:px-8 section-fade">
-         <div class="grid align-items-center">
-             <!-- Text Column -->
-             <div class="col-12 md:col-8">
-                 <div class="mb-3 font-bold text-3xl text-center md:text-left">
-                    <span class="text-900">Designed for Scalability & Security</span>
-                </div>
-                <div class="text-700 text-xl line-height-3 text-center md:text-left mb-6">Our multi-tenant architecture ensures data isolation, while robust security measures and monitoring provide peace of mind. Manage users and tenants easily through the web portal.</div>
-             </div>
-             <!-- Image Column (Replaced Icon) -->
-             <div class="col-12 md:col-4 text-center md:text-right mb-4 md:mb-0">
-                 <!-- Replaced <i> tag with <img> tag -->
-                 <img src="/illustration security.png" alt="Security Illustration" style="max-width: 100%; height: auto; max-height: 350px;" class="block mx-auto md:ml-auto"> <!-- Adjust max-height and alignment as needed -->
-             </div>
-         </div>
-         <!-- Feature cards for this section -->
-         <div class="grid text-center mt-4">
-             <div class="col-12 md:col-4 mb-4 px-5">
-                <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
-                    <i class="pi pi-users text-4xl text-primary"></i>
-                </span>
-                <div class="text-900 text-xl mb-3 font-medium">Multi-Tenant Architecture</div>
-                <span class="text-700 line-height-3">Securely isolate tenant data using database schemas, managed via a user-friendly web portal.</span>
+<!-- Section 2: Advanced Technology -->
+<div #section class="surface-ground px-4 py-8 md:px-6 lg:px-8 section-fade">
+    <div class="text-center font-bold text-3xl text-900 mb-3">Powered by Modern Technology</div>
+    <div class="text-center text-700 text-xl line-height-3 mb-6">Our platform combines industry-standard tools with a beautiful, responsive interface to deliver enterprise-grade backup management without complexity.</div>
+    <div class="grid">
+        <!-- Feature cards with icons -->
+        <div class="col-12 md:col-4 mb-4 px-5 text-center">
+            <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
+                <i class="pi pi-copy text-4xl text-primary"></i>
+            </span>
+            <div class="text-900 text-xl mb-3 font-medium">Efficient Deduplication</div>
+            <span class="text-700 line-height-3">Restic's chunk-based deduplication significantly reduces storage requirements and transfer times.</span>
+        </div>
+        <div class="col-12 md:col-4 mb-4 px-5 text-center">
+            <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
+                <i class="pi pi-cloud text-4xl text-primary"></i>
+            </span>
+            <div class="text-900 text-xl mb-3 font-medium">Flexible Storage</div>
+            <span class="text-700 line-height-3">Store backups in Azure Blob Storage for scalability or use local storage for complete control.</span>
+        </div>
+        <div class="col-12 md:col-4 mb-4 px-5 text-center">
+            <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
+                <i class="pi pi-cog text-4xl text-primary"></i>
+            </span>
+            <div class="text-900 text-xl mb-3 font-medium">Agentless Architecture</div>
+            <span class="text-700 line-height-3">No need to install agents on target systems - only SSH access is required for seamless operation.</span>
+        </div>
+    </div>
+</div>
+
+<!-- Section 3: User Experience & Security -->
+<div #section class="surface-section px-4 py-8 md:px-6 lg:px-8 section-fade">
+     <div class="grid align-items-center">
+         <!-- Text Column -->
+         <div class="col-12 md:col-8">
+             <div class="mb-3 font-bold text-3xl text-center md:text-left">
+                <span class="text-900">Enterprise Management Made Simple</span>
             </div>
-             <div class="col-12 md:col-4 mb-4 px-5">
-                <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
-                    <i class="pi pi-shield text-4xl text-primary"></i>
-                </span>
-                <div class="text-900 text-xl mb-3 font-medium">End-to-End Security</div>
-                <span class="text-700 line-height-3">Client-side AES-256 encryption, SSL/TLS, and secure SSH key management.</span>
+            <div class="text-700 text-xl line-height-3 text-center md:text-left mb-4">
+                Our intuitive dashboard provides complete visibility into your backup operations. Role-based access control ensures users have appropriate permissions:
             </div>
-             <div class="col-12 md:col-4 mb-4 px-5">
-                <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
-                    <i class="pi pi-chart-bar text-4xl text-primary"></i>
-                </span>
-                <div class="text-900 text-xl mb-3 font-medium">Monitoring & Logging</div>
-                <span class="text-700 line-height-3">Comprehensive JSON logging fed into the ELK stack for centralized monitoring.</span>
+            <div class="text-700 text-xl line-height-3 md:text-left pl-0 md:pl-4">
+                <p><i class="pi pi-user-plus text-primary mr-2"></i> <b>Owner/Admin users</b> get full platform access</p>
+                <p><i class="pi pi-users text-primary mr-2"></i> <b>Operator users</b> can perform backup/restore operations</p>
             </div>
          </div>
+         <!-- Image Column -->
+         <div class="col-12 md:col-4 text-center md:text-right mb-4 md:mb-0">
+             <img src="/illustration security.png" alt="Security Illustration" style="max-width: 100%; height: auto; max-height: 350px;" class="block mx-auto md:ml-auto">
+         </div>
+     </div>
+     <!-- Feature cards for this section -->
+     <div class="grid text-center mt-6">
+         <div class="col-12 md:col-4 mb-4 px-5">
+            <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
+                <i class="pi pi-shield text-4xl text-primary"></i>
+            </span>
+            <div class="text-900 text-xl mb-3 font-medium">End-to-End Security</div>
+            <span class="text-700 line-height-3">AES-256 encryption, secure authentication, and comprehensive audit logging.</span>
+        </div>
+         <div class="col-12 md:col-4 mb-4 px-5">
+            <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
+                <i class="pi pi-chart-line text-4xl text-primary"></i>
+            </span>
+            <div class="text-900 text-xl mb-3 font-medium">Analytics Dashboard</div>
+            <span class="text-700 line-height-3">Visualize success rates, storage utilization, and backup performance metrics.</span>
+        </div>
+         <div class="col-12 md:col-4 mb-4 px-5">
+            <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
+                <i class="pi pi-sync text-4xl text-primary"></i>
+            </span>
+            <div class="text-900 text-xl mb-3 font-medium">Scheduled Operations</div>
+            <span class="text-700 line-height-3">Set up recurring backup jobs with customizable retention policies.</span>
+        </div>
+     </div>
+</div>
+
+<!-- Call to Action Section -->
+<div class="surface-ground px-4 py-8 md:px-6 lg:px-8">
+    <div class="text-center mb-5">
+        <div class="font-bold text-3xl text-900 mb-3">Ready to secure your critical data?</div>
+        <div class="text-700 text-xl mb-5">Start protecting your systems with our enterprise-grade backup solution today.</div>
+        <div class="flex justify-content-center gap-4">
+            <a href="/signup" class="p-button p-component p-button-raised p-button-primary" style="font-size: 1.1rem; padding: 0.75rem 1.5rem;">
+                <span class="p-button-label">Create Account</span>
+                <i class="pi pi-arrow-right ml-2"></i>
+            </a>
+            <a href="/quicksetup" class="p-button p-component p-button-outlined" style="font-size: 1.1rem; padding: 0.75rem 1.5rem;">
+                <span class="p-button-label">View Setup Guide</span>
+            </a>
+        </div>
     </div>
-
-    <!-- Footer Section -->
-    <!--footer class="surface-ground px-4 py-6 md:px-6 lg:px-8 text-center">
-        <img src="/whitecapebcklogo.png" alt="Logo" height="40" class="mb-4"> 
-
-        <div class="grid justify-content-center mb-4">
-            <div class="col-12 md:col-auto px-3 mb-2 md:mb-0">
-                <a href="#" class="text-primary font-medium">Documentation</a>
-            </div>
-            <div class="col-12 md:col-auto px-3 mb-2 md:mb-0">
-                <a href="#" class="text-primary font-medium">API Reference</a>
-            </div>
-            <div class="col-12 md:col-auto px-3 mb-2 md:mb-0">
-                <a href="#" class="text-primary font-medium">Support</a>
-            </div>
-            <div class="col-12 md:col-auto px-3 mb-2 md:mb-0">
-                <a href="#" class="text-primary font-medium">Contact Us</a>
-            </div>
-            <div class="col-12 md:col-auto px-3 mb-2 md:mb-0">
-                <a href="#" class="text-primary font-medium">Privacy Policy</a>
-            </div>
-            <div class="col-12 md:col-auto px-3 mb-2 md:mb-0">
-                <a href="#" class="text-primary font-medium">Terms of Service</a>
-            </div>
+    
+    <div class="surface-card p-4 shadow-2 border-round mt-6 mx-auto" style="max-width: 800px">
+        <div class="text-center text-900 font-medium text-xl mb-3">Trusted by organizations worldwide</div>
+        <div class="flex flex-wrap justify-content-center gap-5 mt-4">
+            <span class="font-medium text-xl text-800">Enterprise</span>
+            <span class="font-medium text-xl text-800">Healthcare</span>
+            <span class="font-medium text-xl text-800">Education</span>
+            <span class="font-medium text-xl text-800">Government</span>
+            <span class="font-medium text-xl text-800">Financial</span>
         </div>
+    </div>
+</div>
 
-        <div class="text-700">
-            © 2025 Whitecape Technologies. All rights reserved.
-        </div>
-        
-        <<div class="mt-3">
-            <a href="#" class="text-primary mr-3"><i class="pi pi-github"></i></a>
-            <a href="#" class="text-primary mr-3"><i class="pi pi-linkedin"></i></a>
-            <a href="#" class="text-primary"><i class="pi pi-twitter"></i></a>
-        </div> >
-    </footer-->
+<app-footer></app-footer>
 
 

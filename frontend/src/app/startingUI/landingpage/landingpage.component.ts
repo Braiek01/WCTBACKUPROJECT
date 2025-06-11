@@ -3,6 +3,9 @@ import { isPlatformBrowser } from '@angular/common'; // Added isPlatformBrowser
 import { Router } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { RippleModule } from 'primeng/ripple';
+import { DashboardComponent } from "../../tenantUI/dashboard/dashboard.component";
+import { FooterComponent } from '../../../components/footer/footer.component';
+import { NavbarComponent } from "../../../components/navbar/navbar.component";
 // Add other necessary imports for PrimeNG modules used in the template
 
 @Component({
@@ -11,8 +14,9 @@ import { RippleModule } from 'primeng/ripple';
   imports: [
     ButtonModule,
     RippleModule,
-    // Add other necessary PrimeNG modules here
-  ],
+    FooterComponent,
+    NavbarComponent
+],
   templateUrl: './landingpage.component.html',
   styleUrls: ['./landingpage.component.css']
 })
