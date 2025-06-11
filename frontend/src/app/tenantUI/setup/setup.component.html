@@ -1,0 +1,251 @@
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
+
+<p-toast></p-toast>
+
+<!-- Loading spinner when checking setup status -->
+<div *ngIf="isLoading && !displayModal" class="flex justify-content-center align-items-center" style="height: 80vh;">
+  <p-progressSpinner strokeWidth="4" [style]="{width: '50px', height: '50px'}"></p-progressSpinner>
+  <span class="ml-3 font-medium">Checking setup status...</span>
+</div>
+
+<!-- Setup already complete message -->
+<div *ngIf="setupComplete && !displayModal" class="flex flex-column align-items-center justify-content-center" style="height: 80vh;">
+  <h2 class="text-2xl text-center mb-3">Setup Complete!</h2>
+  <p class="text-center mb-4">Backrest has been installed successfully.</p>
+  
+  <!-- Add icon and style the button prominently -->
+  <button pButton pRipple label="Go to Dashboard" icon="pi pi-home" 
+    class="p-button-lg p-button-raised"
+    [routerLink]="['/', tenantName, 'dashboard']"></button>
+    
+  <!-- Small help text below the button -->
+  <small class="text-center mt-3 text-500">
+    If you're not redirected automatically, click the button above.
+  </small>
+</div>
+
+<!-- Setup Wizard Modal -->
+<p-dialog [(visible)]="displayModal" 
+  [modal]="true" 
+  [closable]="false"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{width: '90vw', maxWidth: '900px'}"
+  styleClass="setup-wizard-dialog">
+  
+  <ng-template pTemplate="header">
+    <div class="flex align-items-center gap-2">
+      <i class="pi pi-cog text-primary text-xl"></i>
+      <span class="font-bold text-xl">Whitecape Backrest Setup</span>
+    </div>
+  </ng-template>
+  
+  <div class="setup-wizard-container">
+    <!-- Stepper Component -->
+    <p-steps [model]="steps" [activeIndex]="activeIndex" [readonly]="true" styleClass="mb-5"></p-steps>
+    
+    <!-- Step Content -->
+    <div class="step-content p-3">
+      <!-- Step 1: SSH Key Setup (was Step 2) -->
+      <div *ngIf="activeIndex === 0">
+        <h2 class="text-2xl font-medium mb-3">SSH Key Setup</h2>
+        <p class="mb-4 text-700">SSH keys provide secure, password-less access to your server.</p>
+        
+        <div class="p-fluid">
+          <div class="field-radiobutton mb-3">
+            <p-radioButton inputId="generate" name="method" value="generate" [(ngModel)]="sshKeyConfig.method"></p-radioButton>
+            <label for="generate" class="ml-2">Generate new SSH key pair</label>
+          </div>
+          
+          <div class="field-radiobutton mb-4">
+            <p-radioButton inputId="upload" name="method" value="upload" [(ngModel)]="sshKeyConfig.method"></p-radioButton>
+            <label for="upload" class="ml-2">Use existing SSH keys</label>
+          </div>
+          
+          <p-divider></p-divider>
+          
+          <!-- Generate new key option -->
+          <div *ngIf="sshKeyConfig.method === 'generate'" class="my-4">
+            <button pButton pRipple label="Generate SSH Keys" icon="pi pi-key" 
+              (click)="generateSSHKey()" [loading]="isLoading" class="p-button-primary"></button>
+              
+            <div *ngIf="sshKeyConfig.publicKey" class="mt-4">
+              <div class="field">
+                <label class="block font-medium mb-2">Generated Public Key:</label>
+                <textarea pInputTextarea [ngModel]="sshKeyConfig.publicKey" readonly rows="3" styleClass="font-mono"></textarea>
+              </div>
+              
+              <div class="field mt-3">
+                <label class="block font-medium mb-2">Generated Private Key:</label>
+                <textarea pInputTextarea [ngModel]="sshKeyConfig.privateKey" readonly rows="3" styleClass="font-mono"></textarea>
+                <small class="text-600 block mt-1">Keep this private key secure. It will be stored encrypted in the database.</small>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Upload existing key option -->
+          <div *ngIf="sshKeyConfig.method === 'upload'" class="my-4">
+            <div class="field">
+              <label class="block font-medium mb-2">Public Key *</label>
+              <p-fileUpload mode="basic" chooseLabel="Upload Public Key" name="publicKey" 
+                accept=".pub" [auto]="true" [maxFileSize]="10000" 
+                (onSelect)="onFileSelect($event, 'public')" chooseIcon="pi pi-upload"
+                styleClass="mb-2"></p-fileUpload>
+              <textarea pInputTextarea [(ngModel)]="sshKeyConfig.publicKey" rows="3" 
+                placeholder="Or paste your public key here (e.g., contents of id_rsa.pub file)"></textarea>
+            </div>
+            
+            <div class="field mt-3">
+              <label class="block font-medium mb-2">Private Key</label>
+              <p-fileUpload mode="basic" chooseLabel="Upload Private Key" name="privateKey" 
+                accept=".pem,.key" [auto]="true" [maxFileSize]="10000" 
+                (onSelect)="onFileSelect($event, 'private')" chooseIcon="pi pi-upload"
+                styleClass="mb-2"></p-fileUpload>
+              <textarea pInputTextarea [(ngModel)]="sshKeyConfig.privateKey" rows="3" 
+                placeholder="Or paste your private key here (e.g., contents of id_rsa file)"></textarea>
+            </div>
+          </div>
+          
+          <div class="field mt-3">
+            <div class="flex align-items-center">
+              <p-inputSwitch [(ngModel)]="sshKeyConfig.savePrivateKey" inputId="savePrivateKey"></p-inputSwitch>
+              <label for="savePrivateKey" class="ml-2">Store private key (encrypted) for automated operations</label>
+            </div>
+            <small class="text-600 block mt-1">
+              Private keys are stored securely using encryption. This enables the system to perform automated operations.
+            </small>
+          </div>
+          
+          <div *ngIf="sshKeyConfig.savePrivateKey" class="field mt-3">
+            <label for="passphrase" class="block font-medium mb-2">Passphrase (Optional)</label>
+            <p-password id="passphrase" [(ngModel)]="sshKeyConfig.passphrase" [toggleMask]="true" [feedback]="false" placeholder="Passphrase for private key" styleClass="w-full"></p-password>
+            <small class="text-600 block mt-1">If your private key is protected with a passphrase, enter it here</small>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Step 2: Server Configuration (was Step 1) -->
+      <div *ngIf="activeIndex === 1">
+        <h2 class="text-2xl font-medium mb-3">Server Configuration</h2>
+        <p class="mb-4 text-700">Configure the connection details for your server where Backrest will be installed.</p>
+        
+        <div class="p-fluid formgrid grid">
+          <div class="field col-12 md:col-6">
+            <label for="serverName" class="block font-medium mb-2">Server Name *</label>
+            <input pInputText id="serverName" [(ngModel)]="serverConfig.name" placeholder="e.g., Production Server" required />
+            <small class="text-600 block mt-1">Enter a name to identify this server</small>
+          </div>
+          
+          <div class="field col-12 md:col-6">
+            <label for="hostname" class="block font-medium mb-2">Hostname or IP Address *</label>
+            <input pInputText id="hostname" [(ngModel)]="serverConfig.hostname" placeholder="e.g., server.example.com or 192.168.1.10" required />
+            <small class="text-600 block mt-1">Enter the hostname or IP address of your server</small>
+          </div>
+          
+          <div class="field col-12 md:col-6">
+            <label for="ipAddress" class="block font-medium mb-2">IP Address *</label>
+            <input pInputText id="ipAddress" [(ngModel)]="serverConfig.ip_address" placeholder="e.g., 192.168.1.10" required />
+            <small class="text-600 block mt-1">Enter the IP address of your server</small>
+          </div>
+          
+          <div class="field col-12 md:col-6">
+            <label for="port" class="block font-medium mb-2">SSH Port</label>
+            <input pInputText id="port" type="number" [(ngModel)]="serverConfig.port" placeholder="22" />
+            <small class="text-600 block mt-1">Default SSH port is 22</small>
+          </div>
+          
+          <div class="field col-12 md:col-6">
+            <label for="username" class="block font-medium mb-2">SSH Username *</label>
+            <input pInputText id="username" [(ngModel)]="serverConfig.username" placeholder="e.g., admin" required />
+            <small class="text-600 block mt-1">User must have sudo privileges</small>
+          </div>
+          
+          <div class="field col-12 md:col-6">
+            <label for="password" class="block font-medium mb-2">SSH Password</label>
+            <p-password id="password" [(ngModel)]="serverConfig.password" [toggleMask]="true" [feedback]="false" placeholder="SSH Password" styleClass="w-full"></p-password>
+            <small class="text-600 block mt-1">Required if not using SSH keys</small>
+          </div>
+          
+          <div class="field col-12">
+            <label for="description" class="block font-medium mb-2">Server Description</label>
+            <textarea pInputTextarea id="description" [(ngModel)]="serverConfig.description" rows="3" placeholder="Optional description for this server"></textarea>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Step 3: Backrest Configuration (remains Step 3) -->
+      <div *ngIf="activeIndex === 2">
+        <h2 class="text-2xl font-medium mb-3">Backrest Configuration</h2>
+        <p class="mb-4 text-700">Configure your Backrest instance settings.</p>
+        
+        <div class="p-fluid formgrid grid">
+          <div class="field col-12 md:col-6">
+            <label for="installPath" class="block font-medium mb-2">Installation Path *</label>
+            <input pInputText id="installPath" [(ngModel)]="backrestConfig.installPath" placeholder="/opt/backrest" required />
+            <small class="text-600 block mt-1">Directory where Backrest will be installed</small>
+          </div>
+          
+          <div class="field col-12 md:col-6">
+            <label for="backrestPort" class="block font-medium mb-2">Backrest Service Port</label>
+            <input pInputText id="backrestPort" type="number" [(ngModel)]="backrestConfig.port" placeholder="9898" />
+            <small class="text-600 block mt-1">Port for the Backrest service</small>
+          </div>
+          
+          <div class="field col-12">
+            <div class="flex align-items-center">
+              <p-inputSwitch [(ngModel)]="backrestConfig.autoStart" inputId="autoStart"></p-inputSwitch>
+              <label for="autoStart" class="ml-2">Start Backrest service automatically after installation</label>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Backrest Instance Configuration -->
+        <div class="col-12">
+          <h4 class="mt-4 mb-2">Backrest Instance Configuration</h4>
+          <p-divider></p-divider>
+        </div>
+        
+        <div class="field col-12 md:col-6">
+          <label for="instanceId" class="block font-medium mb-2">Instance ID</label>
+          <input pInputText id="instanceId" [(ngModel)]="backrestConfig.instanceId" 
+            placeholder="mybackrest" />
+          <small class="text-600 block mt-1">Unique identifier for this Backrest instance</small>
+        </div>
+        
+        <div class="field col-12 md:col-6">
+          <label for="adminUsername" class="block font-medium mb-2">Admin Username *</label>
+          <input pInputText id="adminUsername" [(ngModel)]="backrestConfig.adminUsername" 
+            placeholder="admin" required />
+          <small class="text-600 block mt-1">Username for the Backrest admin account</small>
+        </div>
+        
+        <div class="field col-12 md:col-6">
+          <label for="adminPassword" class="block font-medium mb-2">Admin Password *</label>
+          <p-password id="adminPassword" [(ngModel)]="backrestConfig.adminPassword" 
+            [toggleMask]="true" [feedback]="true" placeholder="Admin Password" styleClass="w-full" required></p-password>
+          <small class="text-600 block mt-1">Password for the Backrest admin account</small>
+        </div>
+        
+        <div class="field col-12 md:col-6">
+          <label for="defaultPassword" class="block font-medium mb-2">Default Password</label>
+          <p-password id="defaultPassword" [(ngModel)]="backrestConfig.defaultPassword" 
+            [toggleMask]="true" [feedback]="false" placeholder="Default password for other users" styleClass="w-full"></p-password>
+          <small class="text-600 block mt-1">Used for new users if not specified</small>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Navigation Buttons -->
+    <div class="flex justify-content-between mt-5">
+      <button pButton pRipple type="button" label="Back" icon="pi pi-arrow-left" 
+        class="p-button-secondary" (click)="prevStep()" [disabled]="activeIndex === 0 || isLoading"></button>
+      
+      <button *ngIf="activeIndex < steps.length - 1" pButton pRipple type="button" label="Next" 
+        icon="pi pi-arrow-right" iconPos="right" (click)="nextStep()" [disabled]="isLoading"></button>
+      
+      <button *ngIf="activeIndex === steps.length - 1" pButton pRipple type="button" label="Complete Setup" 
+        icon="pi pi-check" iconPos="right" class="p-button-success" (click)="completeSetup()" [loading]="isLoading"></button>
+    </div>
+  </div>
+</p-dialog>

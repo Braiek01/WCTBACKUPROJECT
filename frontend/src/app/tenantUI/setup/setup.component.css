@@ -1,0 +1,15 @@
+.setup-wizard-container {
+  min-height: 500px;
+}
+
+.step-content {
+  min-height: 400px;
+}
+
+:host ::ng-deep .p-steps .p-steps-item.p-highlight .p-steps-number {
+  background: var(--primary-color);
+}
+
+.font-mono {
+  font-family: monospace;
+}
