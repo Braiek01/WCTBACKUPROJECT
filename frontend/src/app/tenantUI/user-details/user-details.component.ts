@@ -1,4 +1,3 @@
-
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router'; // Import RouterLink
@@ -22,6 +21,7 @@ import { DialogModule } from 'primeng/dialog'; // <-- Add DialogModule
 import { JobReportComponent } from '../job-report/job-report.component';
 
 import { ProgressBarModule } from 'primeng/progressbar'; // <-- Add ProgressBarModule
+import { AuthService } from '../../core/services/auth.service'; // <-- Import AuthService (adjust path as needed)
 
 @Component({
   selector: 'app-user-details',
@@ -106,11 +106,15 @@ export class UserDetailsComponent implements OnInit {
   selectedJobForReport: any = null;
   // --- End Job Report Dialog Properties ---
 
+  // Add this property to the class
+  tenantDomain: string = '';
+  tenantName: string = ''; // <-- Add tenantName property
   constructor(
     private route: ActivatedRoute,
     private router: Router,
     private confirmationService: ConfirmationService,
-    private messageService: MessageService // Inject MessageService
+    private messageService: MessageService, // Inject MessageService
+    private authService: AuthService // Inject AuthService
   ) {}
 
   ngOnInit(): void {
@@ -131,6 +135,12 @@ export class UserDetailsComponent implements OnInit {
         console.warn('User details not found for:', this.username);
     }
     // --- End TODO ---
+
+    // Get tenant domain and name from the auth service
+    this.tenantDomain = this.authService.getTenantDomain() || '';
+    this.tenantName = this.authService.getTenantName() || ''; // <-- Get tenant name
+    console.log('Tenant domain in user details:', this.tenantDomain);
+    console.log('Tenant name:', this.tenantName); // <-- Log tenant name
 
     // Define Action Menu Items
     this.actionItems = [

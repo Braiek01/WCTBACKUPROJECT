@@ -54,6 +54,7 @@
                     <th pSortableColumn="storageVaultSize">Storage Vault Size <p-sortIcon field="storageVaultSize"></p-sortIcon></th>
                     <th pSortableColumn="storageVaultQuota">Storage Vault Quota <p-sortIcon field="storageVaultQuota"></p-sortIcon></th>
                     <th pSortableColumn="policy">Policy <p-sortIcon field="policy"></p-sortIcon></th>
+                    <th style="width: 8rem">Actions</th>
                 </tr>
             </ng-template>
             <ng-template pTemplate="body" let-user>
@@ -71,11 +72,18 @@
                     <td>{{user.storageVaultSize}}</td>
                     <td>{{user.storageVaultQuota}}</td>
                     <td>{{user.policy}}</td>
+                    <!-- Example row actions in user table -->
+                    <td>
+                      <button pButton pRipple icon="pi pi-pencil" class="p-button-rounded p-button-success p-button-text mr-2" 
+                        [routerLink]="['/', tenantName, 'users', user.id]"></button>
+                      <!--button pButton pRipple icon="pi pi-trash" class="p-button-rounded p-button-danger p-button-text" 
+                        (click)="deleteUser(user)"></button-->
+                    </td>
                 </tr>
             </ng-template>
             <ng-template pTemplate="emptymessage">
                 <tr>
-                    <td [attr.colspan]="12">No users found.</td>
+                    <td [attr.colspan]="13">No users found.</td>
                 </tr>
             </ng-template>
             <ng-template pTemplate="summary">

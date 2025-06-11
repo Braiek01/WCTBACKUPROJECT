@@ -13,7 +13,7 @@
         <div class="flex align-items-center">
             <!-- Breadcrumb style navigation -->
             <i class="pi pi-users mr-2 text-xl"></i>
-            <a routerLink="/users" class="text-primary hover:underline cursor-pointer text-xl">Users</a>
+            <a [routerLink]="['/', tenantName, 'users']" class="text-primary hover:underline cursor-pointer text-xl">Users</a>
             <i class="pi pi-angle-right mx-2 text-xl"></i>
             <h2 class="text-xl font-semibold mb-0">{{ username }}</h2>
         </div>
