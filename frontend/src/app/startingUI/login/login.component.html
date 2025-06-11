@@ -1,9 +1,10 @@
 <link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">  
 <link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
-
+<app-navbar></app-navbar>
+<p-toast></p-toast>
 
 <!-- Main container - Removed align-items-center to move card up -->
-<div class="login-container flex justify-content-center min-h-screen text-800 py-4"> <!-- Added bg-gray-900 for dark background -->
+<div class="login-container min-h-screen w-screen flex justify-content-center min-h-screen text-800 py-4"> <!-- Added bg-gray-900 for dark background -->
 
     <!-- Responsive Card Width: Full width on small screens, max-width on medium and up -->
     <p-card styleClass="w-full md:w-30rem login-card surface-card">
@@ -61,11 +62,9 @@
              </div>
         </div>
 
-        <ng-template pTemplate="footer">
-            <!-- Optional: Add footer content if needed -->
-        </ng-template>
     </p-card>
 
 </div>
 
 
+<app-footer></app-footer>
