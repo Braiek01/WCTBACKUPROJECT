@@ -18,9 +18,11 @@ export class NavbarComponent {
     {
       label: 'Get Started',
       items: [
-        { label: 'Overview', icon: 'pi pi-info-circle' },
-        { label: 'Quick Setup', icon: 'pi pi-bolt' }
-      ]
+        { label: 'Overview', icon: 'pi pi-info-circle', routerLink: '/overview' },
+        { label: 'Quick Setup', icon: 'pi pi-bolt', routerLink: '/quicksetup' }
+
+      ],
+      
     },
     {
       label: 'Backing Up',
