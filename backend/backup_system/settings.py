@@ -26,7 +26,7 @@ SECRET_KEY = 'django-insecure-!%z9+rx7(3)_^!!)9=#sypp-bc^0ehe7)o)r+$$z2*4$%l+b))
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '.localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.localhost']  # The .localhost will match all subdomains
 
 
 # Application definition
@@ -50,37 +50,43 @@ INSTALLED_APPS = [
      'django_extensions',
      'storages',
      'django_redis',
+     "django_celery_results",
      # Project apps
      'accounts',
+     'jobs', # Assuming 'jobs' is a tenant-specific app
     
 ]
 
 
 # Multi-tenancy configuration
+# Define SHARED_APPS first, as TENANT_APPS might reference it implicitly or for clarity
 SHARED_APPS = [
-    'django_tenants',  # Must be before django.contrib.contenttypes
-    'tenants',          # Your tenant app
-    'django.contrib.admin',
-    'django.contrib.auth',
+    'django_tenants',  # mandatory
     'django.contrib.contenttypes',
+    'django.contrib.auth', # User model is in public schema
     'django.contrib.sessions',
+    'django.contrib.sites',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    # Third-party apps
-     'drf_yasg',
-     'django_celery_beat',
-     'django_filters',
-     'django_extensions',
-     'storages',
-     'django_redis', 
+    'django.contrib.admin', # Admin for the public schema
 
-    'accounts',
+    # Your custom apps that should reside in the public schema
+    'accounts', # Your User model is here
+    'tenants',  # App where Tenant and Domain models are defined
+
+    # Third-party apps that are shared
     'rest_framework',
+    'rest_framework_simplejwt', # Assuming this is shared
     'corsheaders',
+    'drf_yasg',
+    'django_celery_beat',
+    'django_filters',
+    'django_extensions',
+    'storages',
+    'django_redis',
+    "django_celery_results",
+    
 ]
-
-
-
 
 TENANT_MODEL = "tenants.Tenant"
 TENANT_DOMAIN_MODEL = "tenants.Domain"
@@ -89,21 +95,34 @@ DATABASE_ROUTERS = (
 )
 
 TENANT_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'accounts',
-]
+    # Apps specific to each tenant
+    'django.contrib.contenttypes', # Often needed by tenant apps
+    # 'django.contrib.auth', # REMOVE - User model is shared
+    # 'django.contrib.admin', # Add only if you want a separate admin site per tenant,
+                              # distinct from the public one. Usually, one admin site is enough.
+    # 'django.contrib.sites', # Usually shared
+    # 'django.contrib.sessions', # Usually shared
+    # 'django.contrib.messages', # Usually shared
+    # 'django.contrib.staticfiles', # Usually shared
 
+    #'accounts', # REMOVE - User model is shared
+    'jobs',
+    'backrest', # Assuming 'jobs' is a tenant-specific app
+    # Add other tenant-specific apps here
+]
+BACKREST_API_URL = 'http://localhost:9898'
+# Ensure INSTALLED_APPS is correctly constructed
+# It should include all SHARED_APPS and all TENANT_APPS without duplication
+# A common pattern:
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
+
+# Ensure 'django.contrib.auth' and 'accounts' are NOT in the TENANT_APPS list that gets processed
+# for tenant-specific migrations if they are truly shared.
+# The INSTALLED_APPS construction above should handle this if SHARED_APPS and TENANT_APPS are defined correctly.
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
-    # Use the main tenant middleware
-    'django_tenants.middleware.main.TenantMainMiddleware', 
+    'django_tenants.middleware.main.TenantMainMiddleware', # Should be high up
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -122,6 +141,13 @@ CORS_ALLOWED_ORIGINS = [
     # Add your production frontend URL here later
 ]
 
+
+
+# Configuration for Persistent Ansible Controller
+#ANSIBLE_CONTAINER_NAME = "focused_yalow"
+#HOST_SHARED_ANSIBLE_RUN_DIR = r"C:\Users\defin\WCTPROJECTMVP6.0\backend\ansible\ansible_shared_data" # Raw string for Windows paths
+#CONTAINER_PLAYBOOKS_DIR = "/opt/ansible_playbooks"
+#CONTAINER_SHARED_ANSIBLE_RUN_DIR = "/opt/ansible_run_data"
 
 TEMPLATES = [
     {
@@ -252,3 +278,19 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
+
+AUTHENTICATION_BACKENDS = [
+    'accounts.authentication.EmailOrUsernameLoginBackend',
+    # 'django.contrib.auth.backends.ModelBackend', # You might want to remove or keep the default
+                                                  # depending on if you need it for other purposes (e.g. Django admin direct login).
+                                                  # For the main app login, our custom backend should suffice.
+                                                  # If kept, ensure the order is considered. For this specific login requirement,
+                                                  # relying solely on the custom backend is cleaner.
+]
+
+# Celery Configuration
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'

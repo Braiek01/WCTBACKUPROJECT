@@ -1,3 +1,6 @@
+ansible-core
+ansible-runner
+bcrypt 
 Django
 djangorestframework
 django-tenants
@@ -5,6 +8,7 @@ django-cors-headers
 psycopg2-binary
 celery
 django-celery-beat
+django_celery_results  
 python-dateutil
 python-dotenv 
 pyjwt
@@ -22,3 +26,5 @@ setuptools
 python-dotenv
 django-redis
 drf-yasg
+docker
+paramiko

@@ -1,54 +1,81 @@
 # filepath: c:\Users\defin\WCPROJECTMVP5.0\BACKEND\accounts\api_views.py
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import MyTokenObtainPairSerializer, UserSerializer, TenantUserCreateSerializer
 from rest_framework import generics, permissions, status, viewsets
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError, PermissionDenied
 from django.contrib.auth import get_user_model
 from django_tenants.utils import tenant_context
-
-from .serializers import UserSerializer, TenantUserCreateSerializer
-from tenants.utils import create_tenant_user, create_tenant_admin # Import the utilities
-from tenants.models import Tenant # Import Tenant for checks
+from django.db import IntegrityError
+from tenants.utils import create_tenant_member_and_sync_to_schema, get_tenant_sub_users, modify_tenant_sub_user, delete_tenant_sub_user
+from tenants.models import Tenant
 import logging
-import re # For email generation
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
-# --- Custom Permission (Corrected) ---
+# --- Custom Permissions (IsTenantAdminOrOwner, IsSelfOrTenantAdminOrOwner) ---
 class IsTenantAdminOrOwner(permissions.BasePermission):
     """
-    Allows access only to users who are admin or owner within the current tenant context.
-    Looks up user by email within the tenant schema.
+    Allows access only to users who are admins or owners of the current tenant.
+    Assumes request.tenant and request.user are populated.
     """
-    message = 'You do not have permission to perform this action within this tenant.'
+    message = "You do not have permission to perform this action in this tenant."
 
     def has_permission(self, request, view):
-        # Ensure user is authenticated and tenant context exists
-        if not request.user or not request.user.is_authenticated or not hasattr(request, 'tenant'):
-            logger.warning("Permission check failed: User not authenticated or tenant context missing.")
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if not hasattr(request, 'tenant') or not request.tenant:
+            logger.warning(f"IsTenantAdminOrOwner: Tenant context not available for user {request.user.username}.")
+            return False # No tenant context, deny permission
+
+        # Check if the user belongs to the request's tenant
+        if request.user.tenant != request.tenant:
+            logger.warning(f"User {request.user.username} (tenant: {request.user.tenant.schema_name}) attempting action on tenant {request.tenant.schema_name}.")
             return False
 
-        # Check the user's role *within the current tenant's schema* using email
-        try:
-            with tenant_context(request.tenant):
-                # Fetch the user record from the tenant schema using the authenticated user's email
-                tenant_user = User.objects.get(email=request.user.email) # <-- Use email for lookup
-                # Check if the role_in_tenant allows the action
-                is_allowed = tenant_user.role_in_tenant in ['owner', 'admin']
-                if not is_allowed:
-                    logger.warning(f"Permission denied for user {request.user.email} in tenant {request.tenant.schema_name}. Role: {tenant_user.role_in_tenant}")
-                return is_allowed
-        except User.DoesNotExist:
-            # This case should ideally not happen if user creation logic is correct,
-            # but good to log if it does.
-            logger.error(f"CRITICAL: User {request.user.email} authenticated but NOT found in tenant schema {request.tenant.schema_name} during permission check.")
+        is_owner = request.user.role_in_tenant == User.RoleInTenant.OWNER
+        is_admin = request.user.role_in_tenant == User.RoleInTenant.ADMIN
+        
+        return is_owner or is_admin
+
+class IsSelfOrTenantAdminOrOwner(permissions.BasePermission):
+    """
+    Allows access if the user is the object owner (self) OR
+    if the user is an admin or owner of the current tenant.
+    """
+    message = "You do not have permission to access or modify this resource."
+
+    def has_object_permission(self, request, view, obj):
+        if not request.user or not request.user.is_authenticated:
             return False
-        except Exception as e:
-             logger.error(f"Error during tenant permission check for user {request.user.email} in tenant {request.tenant.schema_name}: {e}", exc_info=True)
-             return False
+        if not hasattr(request, 'tenant') or not request.tenant:
+            return False
+
+        # User is the object itself
+        if obj == request.user:
+            return True
+
+        # User is admin or owner of the tenant the object belongs to
+        # (assuming obj has a 'tenant' attribute that matches request.tenant)
+        if hasattr(obj, 'tenant') and obj.tenant == request.tenant:
+            is_owner = request.user.role_in_tenant == User.RoleInTenant.OWNER
+            is_admin = request.user.role_in_tenant == User.RoleInTenant.ADMIN
+            if is_owner or is_admin:
+                return True
+        return False
+
+# --- Token Views (MyTokenObtainPairView) ---
+class MyTokenObtainPairView(TokenObtainPairView):
+    """
+    Custom TokenObtainPairView to use the MyTokenObtainPairSerializer.
+    This allows customizing the claims in the JWT token.
+    """
+    serializer_class = MyTokenObtainPairSerializer
 
 # --- API Views ---
 
-class UserViewSet(viewsets.ModelViewSet): # <-- CHANGE THIS LINE
+class UserViewSet(viewsets.ModelViewSet):
     """
     API endpoint that allows users within a tenant to be viewed, created (implicitly via router), updated, or deleted.
     Permissions vary by action.
@@ -59,10 +86,28 @@ class UserViewSet(viewsets.ModelViewSet): # <-- CHANGE THIS LINE
     def get_queryset(self):
         """
         This view should only return users within the current tenant's schema.
-        The tenant context is already set by the middleware.
+        For the 'list' action (e.g., GET /api/), we want to show only sub-users (excluding the owner).
+        For 'retrieve' (e.g., GET /api/<pk>/), it can fetch any user including the owner,
+        permissions will handle access.
+        However, to keep the list view clean and focused on "sub-users" if this UserViewSet
+        is indeed serving the root /api/ for listing, we'll filter here.
+        If this UserViewSet is also used for retrieving the owner by PK, this filter might be too broad.
+        Consider if /api/ should list owners or if that's a separate endpoint.
+
+        Assuming /api/ (list action) should list only sub-users of the current tenant:
         """
-        logger.debug(f"Fetching users for tenant: {self.request.tenant.schema_name}")
-        return User.objects.all().order_by('id')
+        if not hasattr(self.request, 'tenant') or not self.request.tenant:
+            logger.error(f"UserViewSet.get_queryset: Tenant context not available for user {self.request.user.username if self.request.user else 'Anonymous'}. Returning no users.")
+            return User.objects.none()
+
+        logger.debug(f"UserViewSet.get_queryset: Fetching users for tenant: {self.request.tenant.schema_name}")
+        
+        # User.objects.all() here queries the current tenant's schema due to middleware.
+        # We exclude the 'OWNER' role_in_tenant to list only sub-users.
+        queryset = User.objects.exclude(role_in_tenant=User.RoleInTenant.OWNER).order_by('id')
+        
+        logger.debug(f"UserViewSet.get_queryset: Returning {queryset.count()} sub-users for tenant {self.request.tenant.schema_name}.")
+        return queryset
 
     def get_permissions(self):
         """
@@ -85,16 +130,6 @@ class UserViewSet(viewsets.ModelViewSet): # <-- CHANGE THIS LINE
 
         return [permission() for permission in permission_classes]
 
-    # Optional: Add custom logic for destroy if needed
-    # def destroy(self, request, *args, **kwargs):
-    #     instance = self.get_object()
-    #     # Add checks here, e.g., prevent deleting the last owner?
-    #     if instance.role_in_tenant == 'owner' and User.objects.filter(role_in_tenant='owner').count() <= 1:
-    #          return Response({"detail": "Cannot delete the last owner."}, status=status.HTTP_400_BAD_REQUEST)
-    #     self.perform_destroy(instance)
-    #     return Response(status=status.HTTP_204_NO_CONTENT)
-
-
 class TenantUserCreateView(generics.CreateAPIView):
     """
     API View for creating a new user within the current tenant's context.
@@ -113,73 +148,164 @@ class TenantUserCreateView(generics.CreateAPIView):
         logger.info(f"User creation request received for tenant: {tenant.schema_name} by user {request.user.email}")
 
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except ValidationError as ve: # Catch validation errors from the serializer itself
+            logger.warning(f"Serializer validation error during tenant user creation for tenant {tenant.schema_name}: {ve.detail}")
+            return Response(ve.detail, status=status.HTTP_400_BAD_REQUEST)
+
         data = serializer.validated_data
 
         # --- User Limit Check ---
         try:
-            with tenant_context(tenant):
+            with tenant_context(tenant): # Explicit tenant context for safety
                 current_users = User.objects.count()
-            if current_users >= tenant.max_users:
-                 logger.warning(f"User limit reached for tenant '{tenant.name}'. Limit: {tenant.max_users}, Current: {current_users}")
-                 return Response({"error": f"Cannot add user. Tenant '{tenant.name}' has reached its maximum user limit ({tenant.max_users})."}, status=status.HTTP_400_BAD_REQUEST)
+            # Ensure max_users is an integer, default to a high number or handle if not set
+            tenant_max_users = getattr(tenant, 'max_users', float('inf')) 
+            if not isinstance(tenant_max_users, int):
+                tenant_max_users = float('inf') # Or a sensible default like 1000
+
+            if current_users >= tenant_max_users:
+                 logger.warning(f"User limit reached for tenant '{tenant.name}'. Limit: {tenant_max_users}, Current: {current_users}")
+                 return Response({"error": f"Cannot add user. Tenant '{tenant.name}' has reached its maximum user limit ({tenant_max_users})."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
              logger.error(f"Error checking user count for tenant {tenant.schema_name}: {e}", exc_info=True)
              return Response({"error": "Failed to verify tenant user limit."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         # --- End User Limit Check ---
 
         # --- Validate Username/Email Uniqueness within Tenant Context ---
+        # These checks are good as a pre-emptive measure.
+        # The final check will be at the database level or within the utility function.
         try:
-            with tenant_context(tenant):
+            with tenant_context(tenant): # Explicit tenant context
                 if User.objects.filter(username=data['username']).exists():
                     logger.warning(f"Username '{data['username']}' already exists in tenant {tenant.schema_name}")
-                    return Response({"username": ["A user with this username already exists in this tenant."]}, status=status.HTTP_400_BAD_REQUEST)
+                    # Let the utility function or DB handle the final IntegrityError for atomicity
+                    # raise ValidationError({"username": ["A user with this username already exists in this tenant."]})
                 if data.get('email') and User.objects.filter(email=data['email']).exists():
                     logger.warning(f"Email '{data['email']}' already exists in tenant {tenant.schema_name}")
-                    return Response({"email": ["A user with this email already exists in this tenant."]}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
+                    # Let the utility function or DB handle the final IntegrityError
+                    # raise ValidationError({"email": ["A user with this email already exists in this tenant."]})
+        except Exception as e: # Catch other errors during uniqueness check
              logger.error(f"Error checking username/email uniqueness for tenant {tenant.schema_name}: {e}", exc_info=True)
-             return Response({"error": "Failed to verify username/email uniqueness."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+             # Not returning here, let the main creation logic proceed and catch IntegrityError later
         # --- End Uniqueness Check ---
 
+        # Corrected user creation logic:
+        try:
+            # Determine role_in_tenant from validated data, default to OPERATOR
+            # Ensure the value from serializer is used, e.g., User.RoleInTenant.OPERATOR
+            role_in_tenant_str = data.get('role_in_tenant', User.RoleInTenant.OPERATOR.value) # Get string value
+            
+            # Convert string role to Enum member if necessary, or ensure serializer provides the Enum member
+            # For simplicity, assuming role_in_tenant_str is 'admin' or 'operator'
+            if role_in_tenant_str == User.RoleInTenant.OWNER.value: # Prevent creating owner this way
+                 logger.warning(f"Attempt to create user with 'OWNER' role_in_tenant via TenantUserCreateView by {request.user.username}.")
+                 return Response({"error": "Cannot create users with 'OWNER' role through this endpoint."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Map string to Enum member for the utility function
+            try:
+                role_in_tenant_enum = User.RoleInTenant(role_in_tenant_str)
+            except ValueError:
+                logger.warning(f"Invalid role_in_tenant string value '{role_in_tenant_str}' provided.")
+                return Response({"role_in_tenant": [f"Invalid role: {role_in_tenant_str}."]}, status=status.HTTP_400_BAD_REQUEST)
 
-        # --- Generate Placeholder Email if Needed ---
-        final_email = data.get('email')
-        if not final_email:
-            logger.info(f"Email not provided for {data['username']}, generating placeholder...")
-            # Use a simple, likely unique format
-            placeholder_email = f"{data['username']}+{tenant.schema_name}@placeholder.local"
-            # We assume this won't collide based on the previous uniqueness check,
-            # but a loop could be added for extreme safety.
-            final_email = placeholder_email
-            logger.info(f"Generated placeholder email: {final_email}")
-        # --- End Email Handling ---
+
+            logger.info(f"Calling create_tenant_member_and_sync_to_schema for {data['username']} with role_in_tenant '{role_in_tenant_enum}' in tenant {tenant.schema_name}")
+            
+            created_user = create_tenant_member_and_sync_to_schema(
+                tenant=tenant,
+                username=data['username'],
+                password=data['password'],
+                role_in_tenant=role_in_tenant_enum, # Pass the Enum member
+                email=data.get('email'), # Will be None if blank/not provided
+                first_name=data.get('first_name', ''),
+                last_name=data.get('last_name', '')
+            )
+
+            public_user_data = UserSerializer(created_user).data # Use your UserSerializer
+            logger.info(f"Successfully created user {data['username']} for tenant {tenant.schema_name}")
+            return Response(public_user_data, status=status.HTTP_201_CREATED)
+
+        except ValidationError as ve: # Catch ValidationError from utility functions or model validation
+            logger.warning(f"Validation error during utility function call for tenant user creation {data.get('username', 'N/A')} in tenant {tenant.schema_name}: {ve.detail if hasattr(ve, 'detail') else str(ve)}")
+            return Response(ve.detail if hasattr(ve, 'detail') else {"error": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError as ie:
+            logger.error(f"Database integrity error during tenant user creation for {data.get('username', 'N/A')} in tenant {tenant.schema_name}: {ie}", exc_info=True)
+            # More specific error messages based on constraint violation
+            if 'username' in str(ie).lower():
+                return Response({"username": ["A user with this username already exists in this tenant."]}, status=status.HTTP_400_BAD_REQUEST)
+            if 'email' in str(ie).lower() and data.get('email'):
+                return Response({"email": ["A user with this email already exists in this tenant."]}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "User creation failed due to a data conflict (e.g., username or email already exists)."}, status=status.HTTP_400_BAD_REQUEST)
+        except ValueError as ve: # Catch ValueErrors from utility (e.g., invalid role)
+            logger.warning(f"Value error during user creation for tenant {tenant.schema_name}: {str(ve)}")
+            return Response({"error": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e: # Generic catch-all for other unexpected errors
+            logger.error(f"Unexpected error during tenant user creation for {data.get('username', 'N/A')} in tenant {tenant.schema_name}: {e}", exc_info=True)
+            return Response({"error": "User creation failed.", "detail": "An internal error occurred during user creation."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class TenantSubUserListView(generics.ListAPIView):
+    serializer_class = UserSerializer
+    permission_classes = [IsTenantAdminOrOwner]
+
+    def get_queryset(self):
+        return get_tenant_sub_users(tenant_obj=self.request.tenant)
+
+class TenantSubUserDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = UserSerializer # For GET and response of PUT/PATCH
+    permission_classes = [IsTenantAdminOrOwner]
+    lookup_field = 'username'
+
+    def get_queryset(self):
+        # Ensures we only operate on sub-users of the current tenant
+        return User.objects.filter(tenant=self.request.tenant).exclude(role_in_tenant=User.RoleInTenant.OWNER)
+
+    def get_object(self):
+        obj = super().get_object()
+        if obj.role_in_tenant == User.RoleInTenant.OWNER:
+             raise PermissionDenied("This endpoint cannot be used to manage tenant owners.")
+        return obj
+        
+    def update(self, request, *args, **kwargs):
+        instance_username = self.kwargs.get(self.lookup_field)
+        self.get_object() # This will raise 404 or PermissionDenied if not appropriate
 
         try:
-            # Use the appropriate utility based on the requested role
-            role_in_tenant = data.get('role_in_tenant', 'operator')
-            user_creation_data = {
-                'username': data['username'],
-                'email': final_email,
-                'password': data['password'],
-                'first_name': data.get('first_name', ''),
-                'last_name': data.get('last_name', ''),
-                'role_in_tenant': role_in_tenant
-            }
-
-            if role_in_tenant in ['owner', 'admin']:
-                logger.info(f"Calling create_tenant_admin for {data['username']} in tenant {tenant.schema_name}")
-                created_user = create_tenant_admin(tenant=tenant, **user_creation_data)
-            else:
-                logger.info(f"Calling create_tenant_user for {data['username']} in tenant {tenant.schema_name}")
-                created_user = create_tenant_user(tenant=tenant, **user_creation_data)
-
-            # Return data of the created public user record
-            user_data = UserSerializer(created_user).data
-            logger.info(f"Successfully created user {data['username']} for tenant {tenant.schema_name}")
-            return Response(user_data, status=status.HTTP_201_CREATED)
-
+            updated_user = modify_tenant_sub_user(
+                user_to_modify_username=instance_username,
+                tenant_obj=request.tenant,
+                data_to_update=request.data
+            )
+            return Response(UserSerializer(updated_user).data)
+        except ValueError as ve:
+            return Response({"error": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
+        except PermissionDenied as pd:
+            return Response({"error": str(pd)}, status=status.HTTP_403_FORBIDDEN)
         except Exception as e:
-            logger.error(f"Tenant user creation failed for tenant {tenant.schema_name}: {e}", exc_info=True)
-            # The utility functions use transaction.atomic, so rollback should occur
-            return Response({"error": "User creation failed.", "detail": "An internal error occurred during user creation."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Error updating sub-user '{instance_username}': {e}", exc_info=True)
+            return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def destroy(self, request, *args, **kwargs):
+        instance_username = self.kwargs.get(self.lookup_field)
+        self.get_object() # This will raise 404 or PermissionDenied if not appropriate
+
+        permanent_delete = request.query_params.get('permanent', 'false').lower() == 'true'
+        if permanent_delete and request.user.role_in_tenant != User.RoleInTenant.OWNER:
+             return Response({"error": "Only tenant owners can permanently delete users."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            result = delete_tenant_sub_user(
+                user_to_delete_username=instance_username,
+                tenant_obj=request.tenant,
+                permanent=permanent_delete
+            )
+            if permanent_delete:
+                return Response(status=status.HTTP_204_NO_CONTENT) # Typical for successful permanent delete
+            return Response(result, status=status.HTTP_200_OK) # For deactivation message
+        except ValueError as ve:
+            return Response({"error": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
+        except PermissionDenied as pd:
+            return Response({"error": str(pd)}, status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            logger.error(f"Error deleting sub-user '{instance_username}': {e}", exc_info=True)
+            return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

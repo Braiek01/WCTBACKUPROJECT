@@ -1,9 +1,9 @@
-# filepath: c:\Users\defin\WCPROJECTMVP5.0\BACKEND\accounts\serializers.py
-from rest_framework import serializers
+import logging
 from django.contrib.auth import get_user_model
-# Remove the direct import of choices
-# from .models import TENANT_ROLE_CHOICES # Import choices
+from rest_framework import serializers, exceptions
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+logger = logging.getLogger(__name__)
 User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
@@ -25,6 +25,38 @@ class TenantUserCreateSerializer(serializers.Serializer):
     first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
     password = serializers.CharField(write_only=True, style={'input_type': 'password'}, min_length=8)
-    role_in_tenant = serializers.ChoiceField(choices=User.TENANT_ROLE_CHOICES, default='operator')
+    role_in_tenant = serializers.ChoiceField(choices=User.RoleInTenant.choices, default='operator')
 
     # Validation happens in the view
+
+class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        
+        # Add custom claims
+        token['username'] = user.username
+        token['email'] = user.email
+        token['role'] = user.role
+        token['role_in_tenant'] = user.role_in_tenant
+        
+        return token
+        
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        
+        # Add tenant_domain and user details to response
+        tenant = self.user.tenant
+        domain = tenant.domains.filter(is_primary=True).first()
+        if domain:
+            data['tenant_domain'] = domain.domain
+            
+        # Add basic user info
+        data['user'] = {
+            'username': self.user.username,
+            'email': self.user.email,
+            'role': self.user.role,
+            'role_in_tenant': self.user.role_in_tenant,
+        }
+        
+        return data
