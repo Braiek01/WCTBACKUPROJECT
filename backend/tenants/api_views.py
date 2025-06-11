@@ -1,123 +1,100 @@
-# filepath: c:\Users\defin\WCPROJECTMVP5.0\BACKEND\tenants\api_views.py
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
 from django.db import transaction
-from django.contrib.auth import get_user_model
-from django_tenants.utils import tenant_context # Keep this if needed elsewhere, not used in create
-
+from django.utils.text import slugify
 from .models import Tenant, Domain
-from .serializers import TenantSignupSerializer, TenantSerializer # Ensure TenantSerializer exists
-from .utils import create_tenant_admin # Use the admin creation for the owner
-import re
+from django.contrib.auth import get_user_model
+from .serializers import TenantSerializer, TenantSignupSerializer
+from .utils import create_tenant_owner_and_sync_to_schema
 import logging
+import re
 
-User = get_user_model()
 logger = logging.getLogger(__name__)
+User = get_user_model()
+
 
 class TenantSignupView(generics.CreateAPIView):
-    """
-    API View for Public Tenant Signup.
-    Creates a new Tenant, its primary Domain, and the initial Owner User.
-    Accessible without authentication.
-    """
     serializer_class = TenantSignupSerializer
-    permission_classes = [permissions.AllowAny] # Anyone can attempt to sign up
+    permission_classes = [permissions.AllowAny]
 
-    # --- TEMPORARY DEBUGGING METHOD REMOVED ---
-    # def post(self, request, *args, **kwargs):
-    #     """Override post to test if the view is reached."""
-    #     logger.info("TenantSignupView POST method reached for debugging!")
-    #     logger.debug(f"Request data: {request.data}")
-    #     return Response({"message": "Signup view reached successfully via POST!"}, status=status.HTTP_200_OK)
-    # --- END TEMPORARY DEBUGGING METHOD ---
-
-
-    # --- ORIGINAL CREATE METHOD RESTORED ---
-    @transaction.atomic # Ensure all steps succeed or fail together
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        logger.info(f"Attempting signup for email: {data['email']}")
 
-        # --- Generate schema_name (URL safe, unique) ---
-        # Use a combination or a more robust unique identifier if last name isn't ideal
-        base_schema_name = re.sub(r'[^a-zA-Z0-9]', '', data['last_name'].lower())[:50] # Limit length
-        if not base_schema_name: base_schema_name = 'tenant' # Fallback
-        schema_name = base_schema_name
-        counter = 1
-        while Tenant.objects.filter(schema_name=schema_name).exists():
-            schema_name = f"{base_schema_name}{counter}" # Append number directly
-            counter += 1
-            if len(schema_name) > 63: # PostgreSQL schema name limit
-                 # Handle extremely unlikely case of very long name + many collisions
-                 logger.error(f"Could not generate unique schema name for base '{base_schema_name}'")
-                 return Response({"error": "Could not generate unique identifier."}, status=status.HTTP_400_BAD_REQUEST)
-        logger.debug(f"Generated schema_name: {schema_name}")
+        logger.info(f"Tenant signup attempt for tenant name: {data['name']}, company: {data.get('company_name', '')}, owner username: {data['username']}")
 
-        # --- Generate domain name ---
-        # For local dev: uses .localhost
-        domain_name = f"{schema_name}.localhost"
-        # For production: use your actual domain suffix
-        # domain_name = f"{schema_name}.yourbackupapp.com"
-        logger.debug(f"Generated domain_name: {domain_name}")
-
-        # --- Create Tenant ---
         try:
-            tenant = Tenant(
-                schema_name=schema_name,
+            base_schema_name = slugify(data['name']).replace('-', '_')
+            if not base_schema_name:
+                base_schema_name = "tenant"
+            
+            schema_name_candidate = base_schema_name
+            counter = 1
+            while Tenant.objects.filter(schema_name=schema_name_candidate).exists():
+                schema_name_candidate = f"{base_schema_name}_{counter}"
+                counter += 1
+            
+            tenant = Tenant.objects.create(
+                schema_name=schema_name_candidate,
                 name=data['name'],
-                first_name=data['first_name'],
-                last_name=data['last_name'],
-                email=data['email'],
                 company_name=data.get('company_name', ''),
-                # Add other fields from Tenant model if needed, ensure they have defaults or are optional
+                email=data['email'],
+                last_name=data.get('last_name', ''),
             )
-            tenant.save() # This creates the schema
-            logger.info(f"Tenant {schema_name} created successfully.")
-        except Exception as e:
-            logger.error(f"Failed to create tenant {schema_name}: {e}", exc_info=True)
-            # Clean up if schema creation failed partially? (TenantMixin might handle this)
-            return Response({"error": "Failed to create tenant."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.info(f"Tenant object created with schema_name: {tenant.schema_name}")
 
-        # --- Create Domain ---
-        try:
-            domain = Domain(
-                domain=domain_name,
+            base_domain_part = re.sub(r'\s+', '-', data['name'].lower())
+            base_domain_part = re.sub(r'[^\w\-]', '', base_domain_part)
+            if not base_domain_part: base_domain_part = tenant.schema_name
+            domain_url = f"{base_domain_part}.localhost"
+
+            Domain.objects.create(
+                domain=domain_url,
                 tenant=tenant,
                 is_primary=True
             )
-            domain.save()
-            logger.info(f"Domain {domain_name} created for tenant {schema_name}.")
-        except Exception as e:
-            logger.error(f"Failed to create domain {domain_name} for tenant {schema_name}: {e}", exc_info=True)
-            # Tenant object still exists, but domain failed. Transaction should roll back.
-            return Response({"error": "Failed to create tenant domain."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.info(f"Domain '{domain_url}' created for tenant '{tenant.name}'.")
 
-        # --- Create Tenant Owner User ---
-        try:
-            # Use the utility function, passing username=None
-            owner_user = create_tenant_admin( # Use create_tenant_admin for owner
+            owner_user = create_tenant_owner_and_sync_to_schema(
                 tenant=tenant,
-                username=None, # Pass None for username
-                email=data['email'], # Email is required by serializer
+                email=data['email'],
                 password=data['password'],
-                first_name=data['first_name'],
-                last_name=data['last_name'],
-                role_in_tenant='owner' # Explicitly set owner role
+                first_name=data.get('first_name', ''),
+                last_name=data.get('last_name', ''),
+                username=data['username']
             )
-            logger.info(f"Owner user (Email: {owner_user.email}) created for tenant {schema_name}.") # Log email instead of username
+
+            tenant_response_serializer = TenantSerializer(tenant)
+            logger.info(f"Successfully created tenant '{tenant.name}' with schema '{tenant.schema_name}' and owner '{owner_user.username}'.")
+            return Response(tenant_response_serializer.data, status=status.HTTP_201_CREATED)
+
+        except ValueError as e:
+            logger.warning(f"Tenant signup failed due to ValueError: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error(f"Failed to create owner user for tenant {schema_name}: {e}", exc_info=True)
-            # Tenant and Domain might exist. Transaction should roll back.
-            return Response({"error": "Failed to create tenant owner."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Tenant signup failed unexpectedly: {e}", exc_info=True)
+            return Response({"error": "An unexpected error occurred during tenant signup."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # --- Prepare Response ---
-        # Return data about the created tenant (excluding sensitive info)
-        # Ensure you have a TenantSerializer defined in tenants/serializers.py
-        response_data = TenantSerializer(tenant).data
-        response_data['domain'] = domain_name # Add the domain explicitly
 
-        headers = self.get_success_headers(response_data)
-        return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
-    # --- END ORIGINAL CREATE METHOD ---
+class TenantDetailView(generics.RetrieveUpdateAPIView):
+    queryset = Tenant.objects.all()
+    serializer_class = TenantSerializer
+    lookup_field = 'schema_name'
+    permission_classes = [permissions.IsAdminUser]
+
+    def get_object(self):
+        queryset = self.filter_queryset(self.get_queryset())
+        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+        assert lookup_url_kwarg in self.kwargs, (
+            'Expected view %s to be called with a URL keyword argument '
+            'named "%s". Fix your URL conf, or set the `.lookup_field` '
+            'attribute on the view correctly.' %
+            (self.__class__.__name__, lookup_url_kwarg)
+        )
+        filter_kwargs = {self.lookup_field: self.kwargs[lookup_url_kwarg]}
+        obj = get_object_or_404(queryset, **filter_kwargs)
+        self.check_object_permissions(self.request, obj)
+        return obj
