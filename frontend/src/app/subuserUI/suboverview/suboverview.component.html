@@ -1,0 +1,157 @@
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
+
+<p-toast></p-toast>
+
+<!-- Top Navigation Bar (Fixed) -->
+<div id="topbar" class="flex align-items-center justify-content-end px-5 py-3 border-bottom-1 surface-border"
+     style="background:#111317; position:fixed; top:0; left:0; right:0; height:64px; z-index:1001;">
+  <div class="flex align-items-center gap-4">
+    <p-splitButton 
+      [label]="username" 
+      icon="pi pi-user" 
+      class="p-button-text p-button-rounded p-button-plain text-white"
+      [model]="splitButtonItems"
+      [style]="{ width: 'auto' }"
+    ></p-splitButton>
+  </div>
+</div>
+
+<!-- Sidebar (Fixed) -->
+<aside id="sidebar" class="flex flex-column justify-content-between"
+       style="position:fixed; top:64px; left:0; width:260px; height:calc(100vh - 64px); background:#111317; z-index:1000;">
+  <div>
+    <div class="flex align-items-center px-4 py-4 border-bottom-1 surface-border">
+      <img src="/whitecapebcklogo.png" alt="Logo" height="65" />
+    </div>
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'subuser']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-home mr-2"></i>
+          <span>Home</span>
+        </a>
+      </li>
+    </ul>
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a (click)="showBackupDialog()" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-database mr-2"></i>
+          <span>Backup</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'restore']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-heart mr-2"></i>
+          <span>Restore</span>
+        </a>
+      </li>
+    </ul>
+    <ul class="list-none p-0 m-0 mb-4">
+      <li>
+        <a [routerLink]="['/', tenantName, 'job-logs']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-history mr-2"></i>
+          <span>Job logs</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</aside>
+
+<!-- Main Content (Fixed, No Scroll) -->
+<main style="
+    position: fixed;
+    top: 64px;
+    left: 260px;
+    width: calc(100vw - 260px);
+    height: calc(100vh - 64px);
+    background: #23272f;
+    padding-bottom: 32px;
+    overflow: hidden;
+">
+  <!-- Top Bar (Page Title & Actions) -->
+  <div class="flex align-items-center justify-content-between px-6 pt-6 pb-4 border-bottom-1 surface-border" style="background:transparent;">
+    <div class="flex align-items-center">
+      <span class="text-2xl font-bold text-white mr-3">Overview</span>
+      <span class="text-lg text-400"><i class="pi pi-calendar"></i> {{ currentMonth }}, {{ currentYear }}</span>
+    </div>
+  
+  </div>
+  <!-- Cards Row -->
+  <div class="flex flex-row gap-5 px-6 py-6 w-full" style="flex:1;">
+    <!-- Protected Items Card -->
+    <div class="surface-card p-5 border-round shadow-2 flex-1" style="min-width:340px; max-width:480px;">
+      <div class="flex align-items-center mb-3">
+        <i class="pi pi-folder text-3xl mr-2 text-primary"></i>
+        <span class="text-xl font-semibold text-white">Protected Items</span>
+      </div>
+      <div class="mb-2">
+        <i class="pi pi-file text-lg mr-2"></i>
+        <span class="text-pink-400 font-medium">New Protected Item</span>
+        <span class="ml-2 text-400">({{ lastBackupDate }})</span>
+      </div>
+      <div class="text-sm">
+        <span class="text-pink-400">No schedule,</span>
+        <span class="text-green-400">Success on {{ lastBackupDay }}</span>
+      </div>
+      <div class="mt-4">
+        <p class="text-700">Last backup: <b>{{ lastBackupMachine }}</b></p>
+      </div>
+    </div>
+    <!-- Storage Vault Quota Card -->
+    <div class="surface-card p-5 border-round shadow-2 flex-1" style="min-width:340px; max-width:480px;">
+      <div class="flex align-items-center mb-3">
+        <i class="pi pi-database text-3xl mr-2 text-primary"></i>
+        <span class="text-xl font-semibold text-white">Storage Vault</span>
+      </div>
+      <div class="mb-4 text-700">
+        Linked Azure Blob Storage
+      </div>
+      <!-- Chart -->
+      <p-chart type="doughnut" [data]="quotaChartData" [options]="quotaChartOptions" style="max-width: 250px; margin: 0 auto;"></p-chart>
+      <div class="flex justify-content-center gap-4 mt-3">
+        <span class="flex align-items-center">
+          <span class="bg-green-500 border-circle w-2rem h-2rem mr-2"></span>
+          <span class="text-700">Used ({{ usedStorage }})</span>
+        </span>
+        <span class="flex align-items-center">
+          <span class="bg-gray-300 border-circle w-2rem h-2rem mr-2"></span>
+          <span class="text-700">Remaining ({{ remainingStorage }})</span>
+        </span>
+      </div>
+    </div>
+  </div>
+</main>
+<!-- ...existing code... -->
+
+<p-dialog header="Create New Backup Job" [(visible)]="backupDialogVisible" [modal]="true" [style]="{ width: '450px' }" [draggable]="false" [resizable]="false" (onHide)="hideBackupDialog()">
+  <div class="p-fluid flex flex-column gap-4 mt-3">
+    <div class="field">
+      <label for="backupName" class="font-semibold">Backup Name</label>
+      <input pInputText id="backupName" [(ngModel)]="backupName" required autofocus />
+      <small class="p-error" *ngIf="!backupName">Backup name is required.</small>
+    </div>
+    <div class="field">
+      <label for="targetHosts" class="font-semibold">Target Hosts/Group</label>
+      <input pInputText id="targetHosts" [(ngModel)]="targetHosts" required placeholder="e.g., webservers, 192.168.1.10" />
+      <small class="p-error" *ngIf="!targetHosts">Target hosts are required.</small>
+    </div>
+    <div class="field">
+      <label for="playbookPath" class="font-semibold">Ansible Playbook Path</label>
+      <input pInputText id="playbookPath" [(ngModel)]="playbookPath" required />
+      <small class="p-error" *ngIf="!playbookPath">Playbook path is required.</small>
+    </div>
+    <div class="field">
+      <label for="backupType" class="font-semibold">Backup Type</label>
+      <p-dropdown id="backupType" [options]="backupTypes" [(ngModel)]="selectedBackupType" optionLabel="label" optionValue="value" placeholder="Select a Type"></p-dropdown>
+    </div>
+    <div class="field">
+      <label for="extraVars" class="font-semibold">Extra Variables (Optional)</label>
+      <textarea pInputTextarea id="extraVars" [(ngModel)]="extraVars" rows="3" placeholder="key=value, key2=value2"></textarea>
+      <small>Comma-separated key-value pairs passed to Ansible.</small>
+    </div>
+  </div>
+  <ng-template pTemplate="footer">
+    <button pButton pRipple label="Cancel" icon="pi pi-times" class="p-button-text" (click)="hideBackupDialog()"></button>
+    <button pButton pRipple label="Run Playbook" icon="pi pi-check" class="p-button-primary" (click)="runBackupPlaybook()" [disabled]="!backupName || !targetHosts || !playbookPath"></button>
+  </ng-template>
+</p-dialog>
