@@ -1,7 +1,7 @@
-
-<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">  
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">
 <link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
-<div class="signup-container grid grid-nogutter surface-ground text-800 min-h-screen align-items-center justify-content-center">
+<app-navbar></app-navbar>
+<div class="signup-container grid grid-nogutter surface-ground text-800 min-h-screen w-screen align-items-center justify-content-center">
 
     <!-- Left Column: Welcome Text -->
     <div class="col-12 md:col-6 p-6 text-center md:text-left flex align-items-center justify-content-center md:justify-content-start">
@@ -19,36 +19,90 @@
                 <div class="text-center text-2xl font-bold pt-4">Sign Up</div>
             </ng-template>
 
+            <!-- ADD Tenant Name Field (Required) -->
             <div class="field mb-4 px-4">
-                <label for="username" class="block text-900 font-medium mb-2">Username</label>
+                <label for="tenantName" class="block text-900 font-medium mb-2">Tenant Name *</label>
+                <p-inputGroup>
+                    <p-inputGroupAddon>
+                        <i class="pi pi-building"></i>
+                    </p-inputGroupAddon>
+                    <input id="tenantName" type="text" pInputText placeholder="Unique name for your tenant" class="w-full" [(ngModel)]="tenantName" required />
+                </p-inputGroup>
+                <small class="block mt-1 text-600">Used for subdomain (e.g., tenantname.localhost)</small>
+            </div>
+
+            <!-- ADD Last Name Field (Required) -->
+            <div class="field mb-4 px-4">
+                <label for="lastName" class="block text-900 font-medium mb-2">Last Name *</label>
                 <p-inputGroup>
                     <p-inputGroupAddon>
                         <i class="pi pi-user"></i>
                     </p-inputGroupAddon>
-                    <input id="username" type="text" pInputText placeholder="Choose a username" class="w-full" [(ngModel)]="username" />
+                    <input id="lastName" type="text" pInputText placeholder="Your last name" class="w-full" [(ngModel)]="lastName" required />
                 </p-inputGroup>
             </div>
+
+            <!-- ADD First Name Field (Optional) -->
             <div class="field mb-4 px-4">
-                <label for="email" class="block text-900 font-medium mb-2">Email</label>
+                <label for="firstName" class="block text-900 font-medium mb-2">First Name</label>
+                <p-inputGroup>
+                    <p-inputGroupAddon>
+                        <i class="pi pi-user"></i>
+                    </p-inputGroupAddon>
+                    <input id="firstName" type="text" pInputText placeholder="Your first name (Optional)" class="w-full" [(ngModel)]="firstName" />
+                </p-inputGroup>
+            </div>
+
+             <!-- ADD Company Name Field (Optional) -->
+            <div class="field mb-4 px-4">
+                <label for="companyName" class="block text-900 font-medium mb-2">Company Name</label>
+                <p-inputGroup>
+                    <p-inputGroupAddon>
+                        <i class="pi pi-briefcase"></i>
+                    </p-inputGroupAddon>
+                    <input id="companyName" type="text" pInputText placeholder="Your company name (Optional)" class="w-full" [(ngModel)]="companyName" />
+                </p-inputGroup>
+            </div>
+
+            <!-- Existing Username Field (Consider if needed for signup data) -->
+            <!-- If username is NOT sent to backend during tenant signup, you might remove this -->
+            <div class="field mb-4 px-4">
+                <label for="username" class="block text-900 font-medium mb-2">Owner Username *</label>
+                <p-inputGroup>
+                    <p-inputGroupAddon>
+                        <i class="pi pi-user"></i>
+                    </p-inputGroupAddon>
+                    <input id="username" type="text" pInputText placeholder="Choose a username for the owner" class="w-full" [(ngModel)]="username" required/>
+                </p-inputGroup>
+                 <small class="block mt-1 text-600">This will be the initial owner/admin account.</small>
+            </div>
+
+            <!-- Existing Email Field (Required) -->
+            <div class="field mb-4 px-4">
+                <label for="email" class="block text-900 font-medium mb-2">Owner Email *</label>
                  <p-inputGroup>
                     <p-inputGroupAddon>
                         <i class="pi pi-envelope"></i>
                     </p-inputGroupAddon>
-                    <input id="email" type="email" pInputText placeholder="Enter your email" class="w-full" [(ngModel)]="email" />
+                    <input id="email" type="email" pInputText placeholder="Enter owner's email" class="w-full" [(ngModel)]="email" required/>
                 </p-inputGroup>
             </div>
+
+            <!-- Existing Password Field (Required) -->
             <div class="field mb-4 px-4">
-                <label for="password" class="block text-900 font-medium mb-2">Password</label>
-                <p-password inputId="password" [(ngModel)]="password" [toggleMask]="true" styleClass="w-full" inputStyleClass="w-full" placeholder="Create a password" [feedback]="true"></p-password>
-            </div>
-             <div class="field mb-4 px-4">
-                <label for="confirmPassword" class="block text-900 font-medium mb-2">Confirm Password</label>
-                <p-password inputId="confirmPassword" [(ngModel)]="confirmPassword" [toggleMask]="true" styleClass="w-full" inputStyleClass="w-full" placeholder="Confirm your password" [feedback]="false"></p-password>
-                <!-- Add validation logic later to check if passwords match -->
+                <label for="password" class="block text-900 font-medium mb-2">Owner Password *</label>
+                <p-password inputId="password" [(ngModel)]="password" [toggleMask]="true" styleClass="w-full" inputStyleClass="w-full" placeholder="Create a password" [feedback]="true" required></p-password>
             </div>
 
+            <!-- Existing Confirm Password Field -->
+             <div class="field mb-4 px-4">
+                <label for="confirmPassword" class="block text-900 font-medium mb-2">Confirm Password *</label>
+                <p-password inputId="confirmPassword" [(ngModel)]="confirmPassword" [toggleMask]="true" styleClass="w-full" inputStyleClass="w-full" placeholder="Confirm your password" [feedback]="false" required></p-password>
+            </div>
+
+            <!-- Action Buttons -->
             <div class="px-4">
-                 <button pButton pRipple label="Sign Up" icon="pi pi-user-plus" class="w-full p-button-primary mb-3" (click)="signUp()"></button> <!-- Assuming you have a signUp() method -->
+                 <button pButton pRipple label="Sign Up" icon="pi pi-user-plus" class="w-full p-button-primary mb-3" (click)="signUp()" [disabled]="isLoading || !tenantName || !lastName || !email || !password || !confirmPassword"></button> <!-- Added basic disabled state -->
 
                  <p-divider align="center" styleClass="my-3">
                     <span class="text-600 font-normal text-sm">OR</span>
@@ -59,12 +113,12 @@
                     pRipple
                     label="Sign Up with Google"
                     icon="pi pi-google"
-                    class="w-full p-button-outlined p-button-secondary mb-3" 
+                    class="w-full p-button-outlined p-button-secondary mb-3"
                     (click)="signInWithGoogle()">
                  </button>
 
                  <!-- Link to Sign In -->
-                 <div class="text-center text-sm mt-3"> <!-- Added mt-3 for spacing -->
+                 <div class="text-center text-sm mt-3">
                     <span class="text-600">Already have an account? </span>
                     <a routerLink="/login" class="text-primary hover:text-primary-dark font-medium">Sign In</a>
                  </div>
@@ -78,4 +132,4 @@
 
 </div> <!-- End Main Grid -->
 
-
+<app-footer></app-footer>

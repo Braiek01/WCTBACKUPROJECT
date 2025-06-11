@@ -1,5 +1,5 @@
-import { Component } from '@angular/core';
-import { Router, RouterLink } from '@angular/router'; // Import Router
+import { Component, inject } from '@angular/core'; // Import inject
+import { Router, RouterLink } from '@angular/router';
 import { CardModule } from 'primeng/card';
 import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
@@ -9,9 +9,11 @@ import { InputGroupModule } from 'primeng/inputgroup';
 import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
-
-import { MessageService } from 'primeng/api'; // Optional: For showing messages
-import { ToastModule } from 'primeng/toast'; // Optional: For showing messages
+import { MessageService } from 'primeng/api';
+import { ToastModule } from 'primeng/toast';
+import { AuthService, SignupData } from '../../core/services/auth.service'; // Adjust path, import SignupData
+import { FooterComponent } from '../../../components/footer/footer.component';
+import { NavbarComponent } from "../../../components/navbar/navbar.component";
 
 @Component({
   selector: 'app-signup',
@@ -27,29 +29,35 @@ import { ToastModule } from 'primeng/toast'; // Optional: For showing messages
     InputGroupAddonModule,
     FormsModule,
     RouterLink,
-    ToastModule // Optional: Add ToastModule
-  ],
-  providers: [], // Optional: Add MessageService provider
+    ToastModule,
+    FooterComponent,
+    NavbarComponent
+],
+  // MessageService needs to be provided, often done in app.config.ts, but can be here too
+  // providers: [MessageService], // Already provided in app.config.ts
   templateUrl: './signup.component.html',
   styleUrls: ['./signup.component.css']
 })
 export class SignupComponent {
-  username = '';
-  email = '';
-  password = '';
-  confirmPassword = '';
-  isLoading = false; // Optional: For loading indicator
+  // Inject services
+  private authService = inject(AuthService);
+  private router = inject(Router);
+  private messageService = inject(MessageService);
 
-  // Inject AuthService and Router
-  constructor(
-
-    private router: Router,
-    private messageService: MessageService // Optional
-  ) {}
+  // Form fields based on SignupData and backend requirements
+  tenantName = ''; // Maps to 'name' (used for schema/subdomain)
+  companyName = ''; // Optional
+  firstName = ''; // Optional
+  lastName = ''; // Required
+  email = ''; // Required
+  password = ''; // Required
+  confirmPassword = ''; // For frontend validation
+  username = ''; // <-- Add the missing username property
+  isLoading = false;
 
   signUp(): void {
     this.isLoading = true;
-    this.messageService.clear(); // Optional
+    this.messageService.clear();
 
     if (this.password !== this.confirmPassword) {
       this.isLoading = false;
@@ -57,15 +65,50 @@ export class SignupComponent {
       return;
     }
 
-    // Prepare user data based on what your backend /api/register/ expects
-    const userData = {
-      username: this.username,
-      email: this.email,
-      password: this.password
-      // Add other fields if your backend requires them (e.g., password2 for confirmation)
-    };
+    // Basic validation for required fields
+    if (!this.tenantName || !this.lastName || !this.email || !this.password) {
+        this.isLoading = false;
+        this.messageService.add({ severity: 'error', summary: 'Error', detail: 'Please fill in all required fields (Tenant Name, Last Name, Email, Password).' });
+        return;
+    }
 
-   
+    // Prepare data matching the SignupData interface AND TenantSignupSerializer
+    const signupData: SignupData & { username: string } = { // Add username to the type temporarily
+      name: this.tenantName, // Tenant/Schema name
+      company_name: this.companyName || undefined,
+      first_name: this.firstName || undefined,
+      last_name: this.lastName,
+      email: this.email,
+      password: this.password,
+      username: this.username // <-- ADD the username from the form
+    };
+    console.log('Calling authService.signup with:', signupData);
+
+    // NOTE: Update SignupData interface if username is permanently required
+    this.authService.signup(signupData as any).subscribe({
+      next: (response) => {
+        this.isLoading = false;
+        console.log('Signup successful:', response);
+        this.messageService.add({ severity: 'success', summary: 'Success', detail: `Tenant '${response.name}' created successfully! Please log in.` });
+        // Redirect to login page after a short delay
+        setTimeout(() => this.router.navigate(['/login']), 2000);
+      },
+      error: (error) => {
+        this.isLoading = false;
+        console.error('Signup failed:', error);
+        // Attempt to parse backend error messages
+        let detail = 'Signup failed. Please check your details and try again.';
+        if (error.error && typeof error.error === 'object') {
+            // Flatten backend validation errors into a single string
+            detail = Object.entries(error.error)
+                           .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+                           .join('; ');
+        } else if (error.message) {
+            detail = error.message;
+        }
+        this.messageService.add({ severity: 'error', summary: 'Signup Failed', detail: detail });
+      }
+    });
   }
 
   signInWithGoogle(): void {
