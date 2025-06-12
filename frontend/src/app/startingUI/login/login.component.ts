@@ -87,7 +87,16 @@ export class LoginComponent {
       },
       error: (error) => {
         this.loading.set(false);
-        const detail = error?.message || 'Invalid credentials or server error.';
+        
+        // Show error toast
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Login Failed',
+          detail: error?.error?.detail || error?.message || 'Invalid username or password'
+        });
+        
+        // Also set the message for inline display if desired
+        const detail = error?.error?.detail || error?.message || 'Invalid credentials or server error.';
         this.messageSeverity.set('error');
         this.messageSummary.set('Login Failed');
         this.messageDetail.set(detail);
@@ -96,8 +105,4 @@ export class LoginComponent {
     });
   }
 
-  signInWithGoogle(): void {
-    console.log('Sign in with Google clicked');
-    // TODO: Implement actual Google Sign-In logic here
-  }
 }
