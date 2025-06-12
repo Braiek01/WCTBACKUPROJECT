@@ -1,0 +1,109 @@
+/* Add these styles to fix dialog display issues */
+
+:host ::ng-deep .custom-dialog .p-dialog-content {
+  background-color: #2d3035;
+  color: white;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+:host ::ng-deep .p-tabview .p-tabview-nav {
+  background-color: #2d3035;
+}
+
+:host ::ng-deep .p-tabview .p-tabview-nav li .p-tabview-nav-link {
+  background-color: #1e1e1e;
+  color: white;
+}
+
+:host ::ng-deep .p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link {
+  background-color: #3f4550;
+  border-color: #3186ea;
+  color: white;
+}
+
+:host ::ng-deep .p-tabview .p-tabview-panels {
+  background-color: #2d3035;
+  color: white;
+}
+
+:host ::ng-deep .p-inputtext {
+  background-color: #23272f;
+  color: white;
+}
+
+:host ::ng-deep .p-inputtext:disabled,
+:host ::ng-deep .p-inputtext[readonly] {
+  background-color: #1e1e1e;
+  opacity: 0.7;
+}
+
+:host ::ng-deep .p-dropdown {
+  background-color: #23272f;
+}
+
+:host ::ng-deep .p-dropdown .p-dropdown-label {
+  color: white;
+}
+
+:host ::ng-deep .dialog-content {
+  padding: 1rem 0;
+}
+
+:host ::ng-deep .plans-tab-view .p-tabview-panels {
+  padding: 1.5rem 0;
+}/* Add these styles to fix dialog display issues */
+
+:host ::ng-deep .custom-dialog .p-dialog-content {
+  background-color: #2d3035;
+  color: white;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+:host ::ng-deep .p-tabview .p-tabview-nav {
+  background-color: #2d3035;
+}
+
+:host ::ng-deep .p-tabview .p-tabview-nav li .p-tabview-nav-link {
+  background-color: #1e1e1e;
+  color: white;
+}
+
+:host ::ng-deep .p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link {
+  background-color: #3f4550;
+  border-color: #3186ea;
+  color: white;
+}
+
+:host ::ng-deep .p-tabview .p-tabview-panels {
+  background-color: #2d3035;
+  color: white;
+}
+
+:host ::ng-deep .p-inputtext {
+  background-color: #23272f;
+  color: white;
+}
+
+:host ::ng-deep .p-inputtext:disabled,
+:host ::ng-deep .p-inputtext[readonly] {
+  background-color: #1e1e1e;
+  opacity: 0.7;
+}
+
+:host ::ng-deep .p-dropdown {
+  background-color: #23272f;
+}
+
+:host ::ng-deep .p-dropdown .p-dropdown-label {
+  color: white;
+}
+
+:host ::ng-deep .dialog-content {
+  padding: 1rem 0;
+}
+
+:host ::ng-deep .plans-tab-view .p-tabview-panels {
+  padding: 1.5rem 0;
+}
