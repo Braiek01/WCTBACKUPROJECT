@@ -93,7 +93,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       label: 'Profile',
       icon: 'pi pi-user',
       command: () => {
-        this.router.navigate(['/', this.tenantDomain, 'profile']);
+        this.router.navigate(['/', this.tenantName, 'profile']);
       }
     },
     {
@@ -643,20 +643,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
   
   showCreateRepoDialog() {
+    // Load servers FIRST
+    this.loadServers();
+    
+    // Then reset dialog fields
     this.newRepo = {
       name: '',
       type: 'local',
-      localPath: '', // Empty by default so user can specify
+      localPath: '',
       cloudProvider: 'preset',
       cloudType: null,
       cloudURI: '',
       accessKey: '',
       secretKey: '',
       password: '',
-      uri: 'local:/opt/backrest/repos/' // Base URI without subfolder
+      uri: 'local:/opt/backrest/repos/'
     };
-    this.selectedServerId = this.servers.length === 1 ? this.servers[0].id : null;
-    this.loadServers();
+    
+    // Don't set server ID here - wait for loadServers to complete
     this.createRepoDialogVisible = true;
   }
   
@@ -860,45 +864,80 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
   
   createCyclePlans() {
+    // Extract the correct numeric ID from the repository object
+    let repositoryId;
+    
+    if (typeof this.newPlan.repository === 'object' && this.newPlan.repository !== null) {
+      // Extract the numeric ID, not the string repository_id
+      repositoryId = this.newPlan.repository['id'];
+      console.log('Using repository ID:', repositoryId);
+    } else if (typeof this.newPlan.repository === 'number') {
+      repositoryId = this.newPlan.repository;
+    } else {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Invalid Repository',
+        detail: 'Please select a valid repository'
+      });
+      this.isCreatingPlan = false;
+      return;
+    }
+    
+    // Use user-defined paths or default paths if empty
+    const pathsToBackup = this.newPlan.paths.length > 0 && this.newPlan.paths[0].trim() !== '' 
+      ? this.newPlan.paths.filter(path => path.trim() !== '') 
+      : ['/etc', '/home', '/var/www'];
+      
+    // Use user-defined excludes or default excludes if empty
+    const patternsToExclude = this.newPlan.excludes.length > 0 && this.newPlan.excludes[0].trim() !== ''
+      ? this.newPlan.excludes.filter(exclude => exclude.trim() !== '')
+      : ['*.tmp', '*.log'];
+
     // Create the full backup plan (every Monday)
     const fullPlanPayload = {
       name: `${this.newPlan.name}_full`,
-      repository: this.newPlan.repository ? this.newPlan.repository.repository_id : null,
-      paths: ['/etc', '/home', '/var/www'],  // Default paths, could be customized
-      excludes: ['*.tmp', '*.log'],          // Default excludes
+      repository: repositoryId,
+      paths: pathsToBackup,  // Use the paths from above
+      excludes: patternsToExclude, // Use the excludes from above
       schedule: {
         clock: 'CLOCK_LOCAL',
-        cron: '0 1 * * 1'                    // Every Monday at 1 AM
+        cron: '0 1 * * 1'  // Every Monday at 1 AM             
       },
       retention_policy: {
-        keep_last: 1,
+        // Keep most recent 5 full backups for operational safety
+        keep_last: 5,
         keep_hourly: 0,
         keep_daily: 0,
         keep_weekly: 0,
-        keep_monthly: 1,                     // Keep one monthly full backup
+        // Keep exactly ONE full backup per month (monthly rotation)
+        keep_monthly: 1,                     
         keep_yearly: 0
       }
     };
+    
+    console.log('Creating full backup plan with payload:', fullPlanPayload);
     
     // First create the full backup plan
     this.apiService.post('backrest/plans/', fullPlanPayload).subscribe({
       next: (fullResponse: any) => {
         console.log('Full backup plan created:', fullResponse);
         
-        // Now create the incremental backup plan (daily except Monday)
+        // Now create the incremental backup plan (every day except Monday)
         const incrementalPlanPayload = {
           name: `${this.newPlan.name}_incremental`,
-          repository: this.newPlan.repository ? this.newPlan.repository.repository_id : null,
-          paths: fullPlanPayload.paths,
-          excludes: fullPlanPayload.excludes,
+          repository: repositoryId,
+          paths: pathsToBackup,  // Use the same paths
+          excludes: patternsToExclude, // Use the same excludes
           schedule: {
             clock: 'CLOCK_LOCAL',
-            cron: '0 1 * * 2,3,4,5,6,0'      // Every day except Monday at 1 AM
+            cron: '0 1 * * 0,2,3,4,5,6'  // Sunday (0) and Tuesday-Saturday (2-6) at 1 AM
           },
           retention_policy: {
-            keep_last: 7,                    // Keep last 7 incrementals
+            // Keep last 31 incrementals (enough for a full month)
+            keep_last: 31,
             keep_hourly: 0,
-            keep_daily: 6,                   // Keep daily backups for a week
+            // No daily limit, letting keep_last handle retention
+            keep_daily: 0,
             keep_weekly: 0,
             keep_monthly: 0,
             keep_yearly: 0
@@ -917,6 +956,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
             });
             
             this.hideCreatePlanDialog();
+            this.loadPlans(); // Refresh the plans list
           },
           error: (err) => this.handlePlanError(err)
         });

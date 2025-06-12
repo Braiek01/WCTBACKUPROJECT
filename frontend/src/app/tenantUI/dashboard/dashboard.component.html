@@ -48,6 +48,20 @@
           <span>Backups</span>
         </a>
       </li>
+      <!-- New Plans Navigation Item -->
+      <li>
+        <a [routerLink]="['/', tenantName, 'plans']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-calendar mr-2"></i>
+          <span>Plans</span>
+        </a>
+      </li>
+      <!-- New Repos Navigation Item -->
+      <li>
+        <a [routerLink]="['/', tenantName, 'repos']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-server mr-2"></i>
+          <span>Repos</span>
+        </a>
+      </li>
       <li>
         <a [routerLink]="['/', tenantName, 'restore']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
           <i class="pi pi-replay mr-2"></i>
@@ -63,12 +77,7 @@
           <span>Job logs</span>
         </a>
       </li>
-      <li>
-        <a [routerLink]="['/', tenantName, 'settings']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
-          <i class="pi pi-cog mr-2"></i>
-          <span>Settings</span>
-        </a>
-      </li>
+
       <li>
         <a [routerLink]="['/', tenantName, 'analytics']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
           <i class="pi pi-chart-line mr-2"></i>
@@ -281,6 +290,21 @@
       <p-password id="repoPassword" [(ngModel)]="newRepo.password" [toggleMask]="true" styleClass="w-full"></p-password>
       <small>Used to encrypt backup data. IMPORTANT: Remember this password; backups cannot be accessed without it.</small>
     </div>
+
+    <!-- Server Selection (always required) -->
+    <div class="field">
+      <label for="serverSelection">Server </label>
+      <p-dropdown 
+        id="serverSelection"
+        [options]="servers" 
+        [(ngModel)]="selectedServerId" 
+        optionLabel="hostname" 
+        optionValue="id"
+        placeholder="Select a server"
+        [required]="true">
+      </p-dropdown>
+      <small *ngIf="servers.length === 0" class="p-error">No servers available. Please add a server first.</small>
+    </div>
   </div>
   
   <ng-template pTemplate="footer">
@@ -334,9 +358,14 @@
     <!-- Repository Selection -->
     <div class="col-12 field">
       <label for="planRepository" class="font-medium">Repository</label>
-      <p-dropdown id="planRepository" [options]="repositories" [(ngModel)]="newPlan.repository" 
-        optionLabel="name" dataKey="repository_id" styleClass="w-full" [filter]="true" filterBy="name"
-        placeholder="Select a repository" [showClear]="true">
+      <p-dropdown id="planRepository" 
+                  [options]="repositories" 
+                  [(ngModel)]="newPlan.repository" 
+                  optionLabel="name" 
+                  dataKey="repository_id"
+                  styleClass="w-full"
+                  [scrollHeight]="'250px'"
+                  placeholder="Select a repository">
         <ng-template pTemplate="selectedItem">
           <div class="flex align-items-center" *ngIf="newPlan.repository">
             <i class="pi pi-database mr-2"></i>
@@ -351,6 +380,38 @@
         </ng-template>
       </p-dropdown>
       <small *ngIf="repositories.length === 0" class="p-error">No repositories available. Please create a repository first.</small>
+    </div>
+    
+    <!-- Path and Exclusions for Cycle Plans -->
+    <div class="col-12" *ngIf="newPlan.planType === 'cycle'">
+      <!-- Path Selection -->
+      <div class="field">
+        <label class="font-medium">Backup Paths</label>
+        <div class="p-inputgroup mb-2" *ngFor="let path of newPlan.paths; let i = index">
+          <input type="text" pInputText [(ngModel)]="newPlan.paths[i]" placeholder="/path/to/backup">
+          <button type="button" pButton icon="pi pi-trash" class="p-button-danger" (click)="removePath(i)"></button>
+        </div>
+        <button type="button" pButton icon="pi pi-plus" label="Add Path" class="p-button-outlined p-button-sm" 
+                (click)="addPath()"></button>
+        <small class="text-500">Default paths include /etc, /home, and /var/www</small>
+      </div>
+      
+      <!-- Excludes -->
+      <div class="field">
+        <label class="font-medium flex align-items-center">
+          Exclude Patterns
+          <i class="pi pi-question-circle ml-2 text-primary cursor-pointer"
+             pTooltip="Patterns to exclude from backup (e.g. *.tmp, *.log)" 
+             tooltipPosition="right"></i>
+        </label>
+        <div class="p-inputgroup mb-2" *ngFor="let exclude of newPlan.excludes; let i = index">
+          <input type="text" pInputText [(ngModel)]="newPlan.excludes[i]" placeholder="*.tmp">
+          <button type="button" pButton icon="pi pi-trash" class="p-button-danger" (click)="removeExclude(i)"></button>
+        </div>
+        <button type="button" pButton icon="pi pi-plus" label="Add Exclude Pattern" class="p-button-outlined p-button-sm" 
+                (click)="addExclude()"></button>
+        <small class="text-500">Default excludes are *.tmp and *.log</small>
+      </div>
     </div>
     
     <!-- Custom Plan Options (only show if custom plan selected) -->
