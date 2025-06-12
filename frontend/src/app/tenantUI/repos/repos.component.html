@@ -1,0 +1,345 @@
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
+
+<p-toast></p-toast>
+<p-confirmDialog></p-confirmDialog>
+
+<!-- Top Navigation Bar (Fixed) -->
+<div id="topbar" class="flex align-items-center justify-content-end px-5 py-3 border-bottom-1 surface-border"
+     style="background:#111317; position:fixed; top:0; left:0; right:0; height:64px; z-index:1001;">
+  <div class="flex align-items-center gap-4">
+    <p-splitButton 
+      [label]="username" 
+      icon="pi pi-user" 
+      class="p-button-text p-button-rounded p-button-plain text-white"
+      [model]="splitButtonItems"
+      [style]="{ width: 'auto' }"
+    ></p-splitButton>
+  </div>
+</div>
+
+<!-- Sidebar (Fixed) -->
+<aside id="sidebar" class="flex flex-column justify-content-between"
+       style="position:fixed; top:64px; left:0; width:260px; height:calc(100vh - 64px); background:#111317; z-index:1000;">
+  <div>
+    <div class="flex align-items-center px-4 py-4 border-bottom-1 surface-border">
+      <img src="/whitecapebcklogo.png" alt="Logo" height="65" />
+    </div>
+    
+    <!-- Navigation -->
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'dashboard']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-home mr-2"></i>
+          <span>Dashboard</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'users']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-users mr-2"></i>
+          <span>Users</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'backups']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-database mr-2"></i>
+          <span>Backups</span>
+        </a>
+      </li>
+      <!-- Plans Navigation Item -->
+      <li>
+        <a [routerLink]="['/', tenantName, 'plans']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-calendar mr-2"></i>
+          <span>Plans</span>
+        </a>
+      </li>
+      <!-- Repos Navigation Item - Highlighted as active -->
+      <li>
+        <a [routerLink]="['/', tenantName, 'repos']" class="flex align-items-center px-4 py-3 text-white bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-server mr-2"></i>
+          <span>Repos</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'restore']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-replay mr-2"></i>
+          <span>Restore</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0 mb-4">
+      <li>
+        <a [routerLink]="['/', tenantName, 'job-logs']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-history mr-2"></i>
+          <span>Job logs</span>
+        </a>
+      </li>
+
+      <li>
+        <a [routerLink]="['/', tenantName, 'analytics']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-chart-line mr-2"></i>
+          <span>Analytics</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</aside>
+
+<!-- Main Content (Fixed, With Scroll) -->
+<main style="
+    position: fixed;
+    top: 64px;
+    left: 260px;
+    width: calc(100vw - 260px);
+    height: calc(100vh - 64px);
+    background: #23272f;
+    padding: 2rem;
+    overflow: auto;
+">
+  <!-- Page Header -->
+  <div class="flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+      <h2 class="text-3xl font-bold text-white mb-0">Repositories <span class="text-xl text-400 ml-1">({{ repositories.length }})</span></h2>
+      <p class="text-400 mt-1">Manage your backup storage locations</p>
+    </div>
+    <button pButton pRipple type="button" icon="pi pi-plus" label="Create Repository" 
+            class="p-button-primary" (click)="showCreateRepoDialog()"></button>
+  </div>
+
+  <!-- Repositories Table -->
+  <div class="card">
+    <p-table [value]="repositories" [loading]="loading"
+             styleClass="p-datatable-striped" [paginator]="true" [rows]="10"
+             [rowsPerPageOptions]="[5,10,25]" [showCurrentPageReport]="true"
+             currentPageReportTemplate="Showing {first} to {last} of {totalRecords} repositories">
+      
+      <ng-template pTemplate="header">
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Server</th>
+          <th>URI</th>
+          <th>Status</th>
+          <th style="width: 10rem">Actions</th>
+        </tr>
+      </ng-template>
+      
+      <ng-template pTemplate="body" let-repo>
+        <tr>
+          <td>
+            <div class="flex align-items-center">
+              <i [class]="getRepoTypeIcon(repo.type)" class="mr-2" style="font-size: 1.2rem"></i>
+              <span class="font-medium">{{repo.name}}</span>
+            </div>
+          </td>
+          <td>{{getRepoTypeLabel(repo.type)}}</td>
+          <td>
+            <span>{{repo.server_name || 'Unknown'}}</span>
+            <span class="text-xs text-500 block">({{repo.server_ip || 'No IP'}})</span>
+          </td>
+          <td>
+            <span class="text-overflow-ellipsis" style="max-width: 250px; display: block;">
+              {{repo.uri}}
+            </span>
+          </td>
+          <td>
+            <p-tag [value]="repo.status || 'unknown'" 
+                   [severity]="getRepoStatusSeverity(repo.status)"></p-tag>
+          </td>
+          <td>
+            <div class="flex">
+              <button pButton pRipple icon="pi pi-eye" class="p-button-rounded p-button-text mr-2"
+                      pTooltip="View Details" (click)="showViewRepoDialog(repo)"></button>
+              <button pButton pRipple icon="pi pi-pencil" class="p-button-rounded p-button-text p-button-warning mr-2"
+                      pTooltip="Edit" (click)="showEditRepoDialog(repo)"></button>
+              <button pButton pRipple icon="pi pi-trash" class="p-button-rounded p-button-text p-button-danger"
+                      pTooltip="Delete" (click)="deleteRepository(repo)"></button>
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+      
+      <ng-template pTemplate="emptymessage">
+        <tr>
+          <td colspan="6">
+            <div class="flex flex-column align-items-center p-5">
+              <i class="pi pi-database text-700 mb-3" style="font-size: 3rem"></i>
+              <span class="text-700 mb-3">No repositories found</span>
+              <p class="text-500 mb-4 text-center">Create your first repository to store backup data securely</p>
+              <button pButton pRipple type="button" icon="pi pi-plus" label="Create Repository" 
+                      class="p-button-primary" (click)="showCreateRepoDialog()"></button>
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </div>
+</main>
+
+<!-- Create/Edit Repository Dialog -->
+<p-dialog [(visible)]="createRepoDialogVisible" 
+          [header]="editingRepo ? 'Edit Repository' : 'Create Repository'" 
+          [modal]="true" [style]="{width: '550px'}"
+          [draggable]="false" [resizable]="false">
+  
+  <div class="grid p-fluid">
+    <!-- Repository Name -->
+    <div class="col-12 field">
+      <label for="repoName" class="font-medium">Repository Name</label>
+      <input id="repoName" type="text" pInputText [(ngModel)]="newRepo.name" 
+             placeholder="backup_repo">
+      <small>A unique name for this repository</small>
+    </div>
+    
+    <!-- Repository Type -->
+    <div class="col-12 field">
+      <label class="font-medium">Repository Type</label>
+      <div class="flex gap-3">
+        <div class="flex align-items-center">
+          <p-radioButton id="localType" name="repoType" [value]="'local'" [(ngModel)]="newRepo.type" inputId="localType"></p-radioButton>
+          <label for="localType" class="ml-2">Local Storage</label>
+        </div>
+        <div class="flex align-items-center">
+          <p-radioButton id="cloudType" name="repoType" [value]="'cloud'" [(ngModel)]="newRepo.type" inputId="cloudType"></p-radioButton>
+          <label for="cloudType" class="ml-2">Cloud Storage</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Repository content (rest of the dialog remains the same) -->
+    <!-- Local Storage Options -->
+    <div class="col-12" *ngIf="newRepo.type === 'local'">
+      <div class="field">
+        <label for="localPath" class="font-medium">Local Path</label>
+        <div class="p-inputgroup">
+          <span class="p-inputgroup-addon">/opt/backrest/repos/</span>
+          <input id="localPath" type="text" pInputText [(ngModel)]="newRepo.localPath" placeholder="myrepo">
+        </div>
+        <small>Directory where backups will be stored on the server</small>
+      </div>
+    </div>
+    
+    <!-- Cloud Storage Options - Simplified to match dashboard -->
+    <div class="col-12" *ngIf="newRepo.type === 'cloud'">
+      <div class="field">
+        <label for="cloudProvider" class="font-medium">Cloud Provider</label>
+        <p-dropdown id="cloudProvider" 
+                    [options]="[{label: 'Amazon S3', value: 'aws'}, 
+                               {label: 'Azure Blob Storage', value: 'azure'}, 
+                               {label: 'Google Cloud Storage', value: 'gcp'}]" 
+                    [(ngModel)]="newRepo.cloudProvider" 
+                    optionLabel="label" optionValue="value"></p-dropdown>
+      </div>
+      
+      <div class="field">
+        <label for="cloudURI" class="font-medium">Cloud URI</label>
+        <input id="cloudURI" type="text" pInputText [(ngModel)]="newRepo.cloudURI" 
+               placeholder="s3:bucket-name/path/">
+        <small *ngIf="newRepo.cloudProvider === 'aws'">Format: s3:bucket-name/path/</small>
+        <small *ngIf="newRepo.cloudProvider === 'azure'">Format: azure:container-name/path/</small>
+        <small *ngIf="newRepo.cloudProvider === 'gcp'">Format: gs:bucket-name/path/</small>
+      </div>
+      
+      <div class="field">
+        <label for="cloudAccess" class="font-medium">Access Key</label>
+        <input id="cloudAccess" type="text" pInputText [(ngModel)]="newRepo.accessKey">
+      </div>
+      
+      <div class="field">
+        <label for="cloudSecret" class="font-medium">Secret Key</label>
+        <p-password id="cloudSecret" [(ngModel)]="newRepo.secretKey" [feedback]="false" [toggleMask]="true" styleClass="w-full"></p-password>
+      </div>
+    </div>
+    
+    <!-- Repository Password (always required) -->
+    <div class="col-12 field">
+      <label for="repoPassword" class="font-medium">Repository Password</label>
+      <p-password id="repoPassword" [(ngModel)]="newRepo.password" [toggleMask]="true" styleClass="w-full"></p-password>
+      <small>Used to encrypt backup data. IMPORTANT: Remember this password; backups cannot be accessed without it.</small>
+    </div>
+    
+    <!-- Server Selection (always required) -->
+    <div class="col-12 field">
+      <label for="serverSelection" class="font-medium">Server</label>
+      <p-dropdown id="serverSelection" 
+                  [options]="servers" 
+                  [(ngModel)]="selectedServerId" 
+                  optionLabel="hostname"
+                  optionValue="id"
+                  placeholder="Select a server">
+        <ng-template let-server pTemplate="item">
+          <div class="flex align-items-center">
+            <i class="pi pi-server mr-2"></i>
+            <div>{{server.hostname || server.name}}</div>
+            <span class="text-xs text-500 ml-2">({{server.ip_address}})</span>
+          </div>
+        </ng-template>
+      </p-dropdown>
+      <small *ngIf="servers.length === 0" class="p-error">No servers available. Please add a server first.</small>
+    </div>
+  </div>
+  
+  <ng-template pTemplate="footer">
+    <button pButton pRipple label="Cancel" icon="pi pi-times" class="p-button-text" 
+            (click)="hideCreateRepoDialog()"></button>
+    <button pButton pRipple 
+            [label]="editingRepo ? 'Update Repository' : 'Create Repository'" 
+            icon="pi pi-check" class="p-button-primary"
+            (click)="editingRepo ? updateRepository() : createRepository()"></button>
+  </ng-template>
+</p-dialog>
+
+<!-- View Repository Details Dialog -->
+<p-dialog [(visible)]="viewRepoDialogVisible" 
+          header="Repository Details" 
+          [modal]="true" [style]="{width: '550px'}"
+          [draggable]="false" [resizable]="false">
+  
+  <div class="p-2" *ngIf="selectedRepo">
+    <div class="flex align-items-center mb-3">
+      <i [class]="getRepoTypeIcon(selectedRepo.type)" class="mr-2 text-primary" style="font-size: 1.5rem"></i>
+      <h2 class="m-0">{{selectedRepo.name}}</h2>
+    </div>
+    
+    <div class="grid">
+      <div class="col-12 mb-2">
+        <p-tag [value]="selectedRepo.status || 'unknown'" 
+               [severity]="getRepoStatusSeverity(selectedRepo.status)" 
+               class="mr-2"></p-tag>
+        <span class="text-500">{{getRepoTypeLabel(selectedRepo.type)}}</span>
+      </div>
+      
+      <div class="col-12 mb-3">
+        <span class="font-medium">Repository URI:</span>
+        <div class="p-2 surface-100 border-round mt-2">
+          <code class="block">{{selectedRepo.uri}}</code>
+        </div>
+      </div>
+      
+      <div class="col-12 mb-3">
+        <span class="font-medium">Server:</span>
+        <div class="flex align-items-center mt-2">
+          <i class="pi pi-server mr-2"></i>
+          <span>{{selectedRepo.server_name || 'Unknown'}}</span>
+          <span class="text-500 ml-2">({{selectedRepo.server_ip || 'No IP'}})</span>
+        </div>
+      </div>
+      
+      <div class="col-12 mb-3">
+        <span class="font-medium">Created:</span>
+        <div class="mt-2">{{selectedRepo.created_at | date:'medium'}}</div>
+      </div>
+    </div>
+  </div>
+  
+  <ng-template pTemplate="footer">
+    <button pButton pRipple label="Close" icon="pi pi-times" class="p-button-text" 
+            (click)="viewRepoDialogVisible = false"></button>
+    <button pButton pRipple label="Edit" icon="pi pi-pencil" class="p-button-primary"
+            (click)="viewRepoDialogVisible = false; showEditRepoDialog(selectedRepo)"></button>
+  </ng-template>
+</p-dialog>
