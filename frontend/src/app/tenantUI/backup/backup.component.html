@@ -1,0 +1,332 @@
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
+
+<p-toast></p-toast>
+<p-confirmDialog></p-confirmDialog>
+
+<!-- Top Navigation Bar (Fixed) -->
+<div id="topbar" class="flex align-items-center justify-content-end px-5 py-3 border-bottom-1 surface-border"
+     style="background:#111317; position:fixed; top:0; left:0; right:0; height:64px; z-index:1001;">
+  <div class="flex align-items-center gap-4">
+    <p-splitButton 
+      [label]="username" 
+      icon="pi pi-user" 
+      class="p-button-text p-button-rounded p-button-plain text-white"
+      [model]="splitButtonItems"
+      [style]="{ width: 'auto' }"
+    ></p-splitButton>
+  </div>
+</div>
+
+<!-- Sidebar (Fixed) -->
+<aside id="sidebar" class="flex flex-column justify-content-between"
+       style="position:fixed; top:64px; left:0; width:260px; height:calc(100vh - 64px); background:#111317; z-index:1000;">
+  <div>
+    <div class="flex align-items-center px-4 py-4 border-bottom-1 surface-border">
+      <img src="/whitecapebcklogo.png" alt="Logo" height="65" />
+    </div>
+    
+    <!-- Navigation -->
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'dashboard']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-home mr-2"></i>
+          <span>Dashboard</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'users']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-users mr-2"></i>
+          <span>Users</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'backups']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1 bg-blue-600">
+          <i class="pi pi-database mr-2"></i>
+          <span>Backups</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'plans']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-calendar mr-2"></i>
+          <span>Plans</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'repos']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-server mr-2"></i>
+          <span>Repos</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'restore']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-replay mr-2"></i>
+          <span>Restore</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0 mb-4">
+      <li>
+        <a [routerLink]="['/', tenantName, 'job-logs']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-history mr-2"></i>
+          <span>Job logs</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'analytics']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-chart-line mr-2"></i>
+          <span>Analytics</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</aside>
+
+<!-- Main Content Area -->
+<main style="
+    position: fixed;
+    top: 64px;
+    left: 260px;
+    width: calc(100vw - 260px);
+    height: calc(100vh - 64px);
+    background: #23272f;
+    padding: 2rem;
+    overflow: auto;
+">
+  <!-- Page Header -->
+  <div class="flex justify-content-between align-items-center mb-4">
+    <div>
+      <h2 class="text-3xl font-bold text-white mb-0">Backups <span class="text-xl text-400 ml-1">({{ backups.length }})</span></h2>
+      <p class="text-400 mt-1">View and manage all your backups</p>
+    </div>
+    <div class="flex gap-2">
+      <button pButton icon="pi pi-filter" label="Filter" class="p-button-outlined p-button-secondary" (click)="onFilter()"></button>
+      <button pButton icon="pi pi-refresh" class="p-button-outlined p-button-secondary" (click)="loadBackups()"></button>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <!-- Filter section - Update this part -->
+  <div class="flex flex-wrap gap-2 mb-3">
+    <div class="p-field">
+      <label for="statusFilter" class="block mb-1">Status:</label>
+      <p-dropdown id="statusFilter" 
+                  [options]="statuses" 
+                  [(ngModel)]="filters.status" 
+                  optionLabel="label" 
+                  optionValue="value"
+                  placeholder="All Statuses"
+                  [style]="{'width':'200px'}">
+      </p-dropdown>
+    </div>
+    
+    <div class="p-field">
+      <label for="repoFilter" class="block mb-1">Repository:</label>
+      <p-dropdown id="repoFilter" 
+                  [options]="repositories" 
+                  [(ngModel)]="filters.repository" 
+                  optionLabel="label" 
+                  optionValue="value"
+                  placeholder="All Repositories"
+                  [style]="{'width':'200px'}">
+      </p-dropdown>
+    </div>
+    
+    <div class="p-field">
+      <label for="serverFilter" class="block mb-1">Server:</label>
+      <p-dropdown id="serverFilter" 
+                  [options]="servers" 
+                  [(ngModel)]="filters.server" 
+                  optionLabel="label" 
+                  optionValue="value"
+                  placeholder="All Servers"
+                  [style]="{'width':'200px'}">
+      </p-dropdown>
+    </div>
+    
+    <div class="flex gap-2 align-items-end">
+      <button pButton label="Apply Filters" icon="pi pi-filter" class="p-button-primary" (click)="onFilter()"></button>
+      <button pButton label="Clear" icon="pi pi-times" class="p-button-outlined" (click)="clearFilters()"></button>
+    </div>
+  </div>
+
+  <!-- Backups Table -->
+  <p-table 
+    #dt
+    [value]="backups" 
+    [rows]="10" 
+    [paginator]="true"
+    [rowsPerPageOptions]="[5, 10, 25, 50]"
+    [loading]="loading"
+    [(selection)]="selectedBackups"
+    [rowHover]="true"
+    dataKey="id"
+    styleClass="p-datatable-sm"
+    [globalFilterFields]="['name', 'repository', 'server', 'status']"
+    responsiveLayout="scroll"
+  >
+    <ng-template pTemplate="caption">
+      <div class="flex justify-content-between flex-wrap">
+        <div class="flex align-items-center justify-content-between">
+          <button pButton label="Delete Selected" icon="pi pi-trash" class="p-button-danger" 
+                  [disabled]="!selectedBackups || !selectedBackups.length"></button>
+        </div>
+        <span class="p-input-icon-left ml-auto">
+          <i class="pi pi-search"></i>
+          <input pInputText type="text" placeholder="Search backups..." (input)="applyFilter($event)"/>
+        </span>
+      </div>
+    </ng-template>
+    
+    <ng-template pTemplate="header">
+      <tr>
+        <th style="width: 3rem">
+          <p-tableHeaderCheckbox></p-tableHeaderCheckbox>
+        </th>
+        <th pSortableColumn="name">Name <p-sortIcon field="name"></p-sortIcon></th>
+        <th pSortableColumn="snapshot_id">Snapshot ID <p-sortIcon field="snapshot_id"></p-sortIcon></th>
+        <th pSortableColumn="repository">Repository <p-sortIcon field="repository"></p-sortIcon></th>
+        <th pSortableColumn="storage_type">Storage Type <p-sortIcon field="storage_type"></p-sortIcon></th>
+        <th pSortableColumn="server">Server <p-sortIcon field="server"></p-sortIcon></th>
+        <th pSortableColumn="size">Size <p-sortIcon field="size"></p-sortIcon></th>
+        <th pSortableColumn="status">Status <p-sortIcon field="status"></p-sortIcon></th>
+        <th pSortableColumn="created_at">Created <p-sortIcon field="created_at"></p-sortIcon></th>
+        <th style="width: 8rem">Actions</th>
+      </tr>
+    </ng-template>
+    
+    <ng-template pTemplate="body" let-backup>
+      <tr>
+        <td>
+          <p-tableCheckbox [value]="backup"></p-tableCheckbox>
+        </td>
+        <td>
+          <span class="font-medium">{{ backup.name }}</span>
+        </td>
+        <td>
+          <span class="font-mono text-xs">{{ backup.snapshot_id }}</span>
+        </td>
+        <td>{{ backup.repository }}</td>
+        <td>
+          <span [class]="'storage-badge ' + backup.storage_type">
+            <i *ngIf="backup.storage_type === 'local'" class="pi pi-hdd mr-1"></i>
+            <i *ngIf="backup.storage_type === 's3'" class="pi pi-amazon mr-1"></i>
+            <i *ngIf="backup.storage_type === 'azure'" class="pi pi-cloud mr-1"></i>
+            {{ backup.storage_type }}
+          </span>
+        </td>
+        <td>{{ backup.server }}</td>
+        <td>{{ backup.sizeMB }}</td>
+        <td>
+          <p-tag [value]="backup.status" [severity]="backup.statusSeverity"></p-tag>
+        </td>
+        <td>{{ backup.created_at | date:'medium' }}</td>
+        <td>
+          <div class="flex gap-2">
+            <button pButton pRipple icon="pi pi-info-circle" class="p-button-rounded p-button-text" 
+                    pTooltip="View Details" (click)="showBackupDetails(backup)"></button>
+            <button pButton pRipple icon="pi pi-trash" class="p-button-rounded p-button-danger p-button-text" 
+                    pTooltip="Delete Backup"></button>
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+    
+    <ng-template pTemplate="emptymessage">
+      <tr>
+        <td colspan="10" class="text-center p-4">
+          <div class="flex flex-column align-items-center">
+            <i class="pi pi-folder-open text-5xl text-400 mb-3"></i>
+            <span class="text-xl text-400">No backups found</span>
+            <span class="text-sm text-400 mt-2">Create a backup plan to get started</span>
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+
+  <!-- Backup Details Dialog -->
+  <p-dialog [(visible)]="backupDetailDialog" [style]="{width: '650px'}" header="Backup Details" [modal]="true" styleClass="p-fluid">
+    <ng-template pTemplate="content" *ngIf="selectedBackup">
+      <div class="grid">
+        <div class="col-12 md:col-6 lg:col-4">
+          <div class="field">
+            <label class="font-medium">Name</label>
+            <div>{{ selectedBackup.name }}</div>
+          </div>
+        </div>
+        <div class="col-12 md:col-6 lg:col-4">
+          <div class="field">
+            <label class="font-medium">Repository</label>
+            <div>{{ selectedBackup.repository }}</div>
+          </div>
+        </div>
+        <div class="col-12 md:col-6 lg:col-4">
+          <div class="field">
+            <label class="font-medium">Server</label>
+            <div>{{ selectedBackup.server }}</div>
+          </div>
+        </div>
+        <div class="col-12 md:col-6 lg:col-4">
+          <div class="field">
+            <label class="font-medium">Storage Type</label>
+            <div>{{ selectedBackup.storage_type }}</div>
+          </div>
+        </div>
+        <div class="col-12 md:col-6 lg:col-4">
+          <div class="field">
+            <label class="font-medium">Status</label>
+            <div>
+              <p-tag [value]="selectedBackup.status" [severity]="selectedBackup.statusSeverity"></p-tag>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 md:col-6 lg:col-4">
+          <div class="field">
+            <label class="font-medium">Size</label>
+            <div>{{ selectedBackup.sizeMB }}</div>
+          </div>
+        </div>
+        <div class="col-12">
+          <div class="field">
+            <label class="font-medium">Snapshot ID</label>
+            <div class="font-mono text-xs p-2 surface-ground border-round">{{ selectedBackup.snapshot_id }}</div>
+          </div>
+        </div>
+        <div class="col-12 md:col-6">
+          <div class="field">
+            <label class="font-medium">Created At</label>
+            <div>{{ selectedBackup.created_at | date:'medium' }}</div>
+          </div>
+        </div>
+        <div class="col-12 md:col-6">
+          <div class="field">
+            <label class="font-medium">Duration</label>
+            <div>{{ selectedBackup.duration }} minutes</div>
+          </div>
+        </div>
+
+        <!-- If there are paths backed up -->
+        <div class="col-12" *ngIf="selectedBackup.paths?.length">
+          <div class="field">
+            <label class="font-medium">Paths Backed Up</label>
+            <ul class="list-none p-0 m-0">
+              <li *ngFor="let path of selectedBackup.paths" class="mb-1">
+                <span class="font-mono text-xs">{{ path }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </ng-template>
+    
+    <ng-template pTemplate="footer">
+      <button pButton pRipple label="Close" icon="pi pi-times" class="p-button-text" (click)="backupDetailDialog = false"></button>
+      <button pButton pRipple label="Restore" icon="pi pi-replay" class="p-button-primary"></button>
+    </ng-template>
+  </p-dialog>
+</main>
