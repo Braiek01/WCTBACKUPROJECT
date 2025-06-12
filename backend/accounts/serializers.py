@@ -60,3 +60,6 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         }
         
         return data
+
+class PasswordResetSerializer(serializers.Serializer):
+    password = serializers.CharField(required=True, write_only=True)

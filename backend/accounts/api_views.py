@@ -309,3 +309,29 @@ class TenantSubUserDetailView(generics.RetrieveUpdateDestroyAPIView):
         except Exception as e:
             logger.error(f"Error deleting sub-user '{instance_username}': {e}", exc_info=True)
             return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+from .serializers import PasswordResetSerializer
+
+class TenantSubUserPasswordResetView(generics.UpdateAPIView):
+    permission_classes = [IsTenantAdminOrOwner]
+    serializer_class = PasswordResetSerializer
+    lookup_field = 'username'
+    
+    def get_queryset(self):
+        return get_tenant_sub_users(tenant_obj=self.request.tenant)
+    
+    def update(self, request, *args, **kwargs):
+        instance_username = self.kwargs.get(self.lookup_field)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        try:
+            # Just pass the password to modify_tenant_sub_user
+            modify_tenant_sub_user(
+                user_to_modify_username=instance_username,
+                tenant_obj=request.tenant,
+                data_to_update={'password': serializer.validated_data['password']}
+            )
+            return Response({'detail': 'Password reset successful'})
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)

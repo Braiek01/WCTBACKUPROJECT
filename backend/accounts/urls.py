@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .api_views import TenantUserCreateView, UserViewSet ,TenantSubUserListView, TenantSubUserDetailView # Assuming UserViewSet manages list/retrieve/update/delete
+from .api_views import TenantUserCreateView, UserViewSet ,TenantSubUserListView, TenantSubUserDetailView, TenantSubUserPasswordResetView # Assuming UserViewSet manages list/retrieve/update/delete
 
 app_name = 'accounts'
 
@@ -15,6 +15,7 @@ urlpatterns = [
     path('users/create/', TenantUserCreateView.as_view(), name='tenant-user-create'),
      path('users/sub-users/', TenantSubUserListView.as_view(), name='tenant-sub-user-list'),
      path('users/sub-users/<str:username>/', TenantSubUserDetailView.as_view(), name='tenant-sub-user-detail'),
+     path('users/sub-users/<str:username>/reset-password/', TenantSubUserPasswordResetView.as_view()),
     # Include router URLs for other user operations (list, retrieve, update, delete)
     path('', include(router.urls)),
 ]

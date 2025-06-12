@@ -8,6 +8,16 @@ import { tenantGuard } from '../../src/app/core/guards/tenant.guard';
 import { SetupWizardComponent } from './tenantUI/setup/setup.component';
 import { setupRequiredGuard } from '../../src/app/core/guards/setup-required.guard';
 import { authGuard } from '../../src/app/core/guards/auth.guards';
+import { DashboardComponent } from './tenantUI/dashboard/dashboard.component';
+import { ReposComponent } from './tenantUI/repos/repos.component';
+import { PlansComponent } from './tenantUI/plans/plans.component';
+import { BackupsComponent } from './tenantUI/backup/backup.component';
+
+import { RestoreComponent } from './tenantUI/restore/restore.component';
+import { JobLogsComponent } from './tenantUI/joblogs/joblogs.component';
+import { ProfileComponent } from './tenantUI/profile/profile.component';
+import { AnalyticsComponent } from './tenantUI/analytics/analytics.component';
+
 
 export const routes: Routes = [
   // Public routes (no tenant in URL)
@@ -28,9 +38,8 @@ export const routes: Routes = [
       },
       {
         path: 'dashboard',
-        loadComponent: () => import('./tenantUI/dashboard/dashboard.component')
-          .then(m => m.DashboardComponent),
-        canActivate: [setupRequiredGuard]
+        component: DashboardComponent,
+        canActivate: [authGuard]
       },
       {
         path: 'users',
@@ -44,6 +53,49 @@ export const routes: Routes = [
           .then(m => m.SuboverviewComponent),
         canActivate: [authGuard]
       },
+      {
+        path: 'users/:username',
+        canActivate: [tenantGuard],
+        loadComponent: () => import('./tenantUI/user-details/user-details.component')
+          .then(c => c.UserDetailsComponent)
+      },
+      {
+        path: 'repos',
+        component: ReposComponent,
+        canActivate: [authGuard]
+      },
+      {
+        path: 'plans',
+        component: PlansComponent,
+        canActivate: [authGuard]
+      },
+      {
+        path: 'backups',
+        component: BackupsComponent,
+        canActivate: [authGuard]
+      },
+      {
+        path: 'restore',
+        component: RestoreComponent,
+        canActivate: [authGuard]
+      },
+      {
+        path: 'job-logs',
+        component: JobLogsComponent,
+        canActivate: [authGuard]
+      },
+      {
+        path: 'profile',
+        component: ProfileComponent,
+        canActivate: [authGuard]
+      },
+      {
+        path: 'analytics',
+        component: AnalyticsComponent,
+        canActivate: [authGuard]
+      },
+      
+      
       //{
        // path: 'settings',
        // loadComponent: () => import('../tenantUI/settings/settings.component')

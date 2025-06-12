@@ -47,6 +47,18 @@ export interface SignupResponse {
     domain: string;
 }
 
+// Add these interfaces if they don't exist
+export interface TenantInfo {
+  name: string;
+  id: string;
+  // other tenant properties
+}
+
+export interface UserInfo {
+  username: string;
+  // other user properties
+}
+
 
 @Injectable({
   providedIn: 'root',
@@ -321,6 +333,24 @@ export class AuthService {
   getUsername(): string | null {
     // Get username from localStorage
     return this.getItem('username');
+  }
+
+  // For getting more tenant details:
+  getTenantDetails(): Observable<any> {
+    const tenantName = this.getTenantName();
+    if (!tenantName) {
+      return throwError(() => new Error('No tenant name available'));
+    }
+    return this.http.get<any>(`/api/tenants/${tenantName}/`);
+  }
+
+  // For getting more user details:
+  getUserDetails(): Observable<any> {
+    const username = this.getUsername();
+    if (!username) {
+      return throwError(() => new Error('No username available'));
+    }
+    return this.http.get<any>(`/api/users/sub-users/${username}/`);
   }
 
   // Make sure this is called when setting the user after login

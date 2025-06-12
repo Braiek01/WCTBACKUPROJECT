@@ -79,6 +79,16 @@ export class ApiService {
     );
   }
 
+  // --- ADD PATCH METHOD ---
+  patch<T>(path: string, body: object = {}): Observable<T> {
+    const apiUrl = this.getTenantApiUrl();
+    const fullPath = `${apiUrl}${path}`;
+    console.log(`ApiService: PATCH request to: ${fullPath} with body:`, body);
+    return this.http.patch<T>(fullPath, body, { headers: this.getAuthHeaders() }).pipe(
+      catchError(this.handleError)
+    );
+  }
+
   private handleError(error: any): Observable<never> {
     console.error('ApiService: An error occurred', error);
     
