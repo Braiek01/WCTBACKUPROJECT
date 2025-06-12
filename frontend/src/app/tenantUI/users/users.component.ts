@@ -1,290 +1,311 @@
-import { Component, OnInit, inject } from '@angular/core'; // Import inject
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterModule } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
+import { HttpClientModule } from '@angular/common/http';
+
+// PrimeNG imports
 import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { DropdownModule } from 'primeng/dropdown';
+import { DialogModule } from 'primeng/dialog';
 import { ToolbarModule } from 'primeng/toolbar';
 import { CheckboxModule } from 'primeng/checkbox';
-import { SplitButtonModule } from 'primeng/splitbutton';
-import { DialogModule } from 'primeng/dialog';
 import { PasswordModule } from 'primeng/password';
-import { MenuItem } from 'primeng/api';
+import { ToastModule } from 'primeng/toast';
+import { SplitButtonModule } from 'primeng/splitbutton';
+import { TagModule } from 'primeng/tag';
+import { TooltipModule } from 'primeng/tooltip';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
 
-import { UserService, TenantUser, CreateTenantUserData } from '../../core/services/user.service'; // Adjust path
+// Services
+import { ConfirmationService, MessageService } from 'primeng/api';
 import { AuthService } from '../../core/services/auth.service';
+import { ApiService } from '../../core/services/api.service';
 
 @Component({
   selector: 'app-users',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, TableModule, ButtonModule, InputTextModule,
-    DropdownModule, ToolbarModule, CheckboxModule, SplitButtonModule,
-    DialogModule, PasswordModule, RouterModule
+    CommonModule,
+    FormsModule,
+    RouterModule,
+    HttpClientModule,
+    TableModule,
+    ButtonModule,
+    InputTextModule,
+    DropdownModule,
+    DialogModule,
+    ToolbarModule,
+    CheckboxModule,
+    PasswordModule,
+    ToastModule,
+    SplitButtonModule,
+    TagModule,
+    TooltipModule,
+    ConfirmDialogModule
+  ],
+  providers: [
+    ConfirmationService,  // Add this provider
+    MessageService        // Add this if not already provided
   ],
   templateUrl: './users.component.html',
-  styleUrls: ['./users.component.css']
+  styleUrl: './users.component.css'
 })
 export class UsersComponent implements OnInit {
-  private userService = inject(UserService); // Inject UserService
-  private authService = inject(AuthService); // Inject AuthService if needed for checks
-
-  users: TenantUser[] = [];
-  selectedUsers: TenantUser[] = [];
-  loading = false;
-  errorMessage: string | null = null;
-
-  // ... other existing properties (rowsPerPageOptions, filterValue, etc.) ...
-  rowsPerPageOptions = [ { label: '10', value: 10 }, { label: '25', value: 25 }, { label: '50', value: 50 }, { label: '100', value: 100 } ];
-  selectedRowsPerPage = 50;
-  filterValue: string = '';
-  bulkActionItems: MenuItem[] = [
-    { label: 'Delete', icon: 'pi pi-trash', command: () => this.deleteSelectedUsers() },
-    { label: 'Disable', icon: 'pi pi-ban', command: () => this.disableSelectedUsers() }
-  ];
-  exportItems: MenuItem[] = [
-    { label: 'Export CSV', icon: 'pi pi-file', command: () => this.exportData('csv') },
-    { label: 'Export Excel', icon: 'pi pi-file-excel', command: () => this.exportData('excel') }
-  ];
-  viewItems: MenuItem[] = [
-    { label: 'Customize Columns', icon: 'pi pi-table', command: () => this.customizeView() }
-  ];
-
-  // --- Add User Dialog Properties ---
-  addUserDialogVisible = false;
-  // --- Update the type definition for newUser to include all form fields ---
-  newUser: CreateTenantUserData & {
-    confirmPassword?: string;
-    accountName?: string;
-    selectedPolicy?: string | null; // Add this
-    selectedProvisioningMode?: string | null; // Add this
-    selectedTemplate?: string | null; // Add this
-    allowAdminReset?: boolean; // Add this
-    requireChangeOnLogin?: boolean; // Add this
-  } = {
-    // Initialize with defaults matching CreateTenantUserData and the new fields
+  // Add properties to match the template
+  users: any[] = [];
+  selectedUsers: any[] = [];
+  newUser: any = {
     username: '',
     password: '',
     confirmPassword: '',
     email: '',
-    role_in_tenant: 'operator',
     accountName: '',
-    selectedPolicy: null, // Default value
-    selectedProvisioningMode: 'auto', // Default value based on dropdown options
-    selectedTemplate: 'default', // Default value based on dropdown options
-    allowAdminReset: true, // Default value
-    requireChangeOnLogin: false, // Default value
+    role: 'user',
+    selectedRole: null,  // Add this property
+    selectedPolicy: null,
+    allowAdminReset: false,
+    requireChangeOnLogin: false
   };
+  
+  username: string = '';
+  tenantName: string = '';
+  addUserDialogVisible: boolean = false;
+  selectedRowsPerPage: number = 10;
+  rowsPerPageOptions = [
+    { label: '10', value: 10 },
+    { label: '25', value: 25 },
+    { label: '50', value: 50 },
+    { label: '100', value: 100 }
+  ];
+  filterValue: string = '';
+  
+  roleOptions = [
+    { name: 'Administrator', code: 'admin' },
+    { name: 'Operator', code: 'operator' },
 
-  // Options for dropdowns in the dialog
+  ];
+  
   policyOptions = [
-    { name: '(none)', code: null }, // Use null for 'none'
-    { name: 'Default User Policy', code: 'default_user' },
-    { name: 'Admin Policy', code: 'admin' }
+    { name: 'Default Policy', code: 'default' },
+    { name: 'Strict Policy', code: 'strict' }
   ];
-  provisioningModeOptions = [
-    { name: 'Provision Storage Vaults automatically, when new devices are registered to this user (recommended)', code: 'auto' },
-    { name: 'Do not provision Storage Vaults automatically', code: 'manual' },
-  ];
-  templateOptions = [
-    { name: 'System Default [Currently: None]', code: 'default' },
-    { name: 'Azure Blob Template', code: 'azure_blob' },
-    // Add other templates if available
-  ];
-  // --- End Add User Dialog Properties ---
+  
 
-  tenantDomain: string = '';
-  tenantName: string = ''; // Add tenantName property
-
-  ngOnInit(): void {
-    // Optional: Check if tenant context is available before loading
-    if (!this.authService.getCurrentTenantDomain()) {
-        this.errorMessage = "Tenant context not found. Please log in again.";
-        this.loading = false;
-        // Optionally redirect to login
-        // this.authService.logout();
-        return;
+  
+  splitButtonItems = [
+    {
+      label: 'Profile',
+      icon: 'pi pi-user',
+      command: () => {
+        this.router.navigate(['/', this.tenantName, 'profile']);
+      }
+    },
+    {
+      label: 'Logout',
+      icon: 'pi pi-sign-out',
+      command: () => this.logout()
     }
-    this.loadUsers();
+  ];
 
-    // Get tenant domain and name from the auth service
-    this.tenantDomain = this.authService.getTenantDomain() || '';
-    this.tenantName = this.authService.getTenantName() || ''; // Get tenant name
-    console.log('Tenant domain in users list:', this.tenantDomain);
-    console.log('Tenant name:', this.tenantName); // Log tenant name
+  constructor(
+    private router: Router,
+    private confirmationService: ConfirmationService,
+    private messageService: MessageService,
+    private authService: AuthService,
+    private apiService: ApiService
+  ) {}
+
+  ngOnInit() {
+    this.username = this.authService.getCurrentUser()?.username || 'User';
+    this.tenantName = this.authService.getTenantName() || '';
+    this.loadUsers();
   }
 
-  loadUsers(): void {
-    this.loading = true;
-    this.errorMessage = null;
-    this.userService.getUsers().subscribe({
-      next: (data) => {
-        // Map backend data if needed, e.g., user.email to user.emailAddress
-        this.users = data.map(user => ({
+  loadUsers() {
+    this.apiService.get('users/sub-users/').subscribe({
+      next: (data: any) => {
+        // Process users to ensure consistent properties
+        this.users = data.map((user: any) => {
+          return {
             ...user,
-            name: user.username || user.email, // Use username or email as display name
-            accountName: user.accountName || '', // Provide default if missing
-            tenant: this.authService.getCurrentTenantDomain()?.split('.')[0] || 'N/A', // Example: Extract tenant name
-            onlineDevices: user.onlineDevices ?? 0, // Provide default
-            devices: user.devices ?? 0, // Provide default
-            emailAddress: user.email, // Map email
-            emailReports: user.emailReports ?? 'N/A', // Provide default
-            protectedItemsQuota: user.protectedItemsQuota ?? 'N/A', // Provide default
-            storageVaultSize: user.storageVaultSize ?? 'N/A', // Provide default
-            storageVaultQuota: user.storageVaultQuota ?? 'N/A', // Provide default
-            policy: user.policy ?? '(none)' // Provide default
-        }));
-        this.loading = false;
+            // If name display logic needs adjustment
+            name: user.first_name && user.last_name 
+              ? `${user.first_name} ${user.last_name}`
+              : user.username
+          };
+        });
+        console.log('Loaded users:', this.users);
       },
-      error: (err) => {
-        console.error('Failed to load users', err);
-        this.errorMessage = 'Could not load users. Please try again later.';
-        if (err.status === 401) { // Example: Handle unauthorized
-            this.errorMessage = 'Your session may have expired. Please log in again.';
-            // Consider redirecting to login: this.authService.logout();
-        }
-        this.loading = false;
+      error: (error) => {
+        console.error('Error loading users:', error);
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Failed to load users'
+        });
       }
     });
   }
 
-  // --- Add User Dialog Methods ---
   showAddUserDialog() {
-    this.newUser = {
-        username: '',
-        password: '',
-        confirmPassword: '', // If you have this
-        email: '',
-        accountName: '', // If you have this
-        // *** Ensure role_in_tenant is initialized, likely to 'operator' ***
-        role_in_tenant: 'operator',
-        // Initialize other form fields
-        selectedPolicy: null, // Example
-        selectedProvisioningMode: null, // Example
-        selectedTemplate: null, // Example
-        allowAdminReset: false, // Example
-        requireChangeOnLogin: false // Example
-    };
     this.addUserDialogVisible = true;
-    this.errorMessage = null; // Clear previous errors
   }
 
   hideAddUserDialog() {
     this.addUserDialogVisible = false;
+    this.resetNewUser();
+  }
+
+  resetNewUser() {
+    this.newUser = {
+      username: '',
+      password: '',
+      confirmPassword: '',
+      email: '',
+      accountName: '',
+      role: 'user',
+      selectedRole: null,
+      selectedPolicy: null,
+      allowAdminReset: false,
+      requireChangeOnLogin: false
+    };
   }
 
   addUser() {
-    if (this.newUser.password !== this.newUser.confirmPassword) {
-      this.errorMessage = "Passwords do not match!";
+    // Basic validation
+    if (!this.newUser.username || !this.newUser.password) {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Validation Error',
+        detail: 'Username and password are required'
+      });
       return;
     }
-    if (!this.newUser.username) {
-         this.errorMessage = "Username is required.";
-         return;
-    }
-     if (!this.newUser.password) {
-         this.errorMessage = "Password is required.";
-         return;
-    }
 
-    // ADD Password Length Check (keep this)
-    if (this.newUser.password.length < 8) {
-        this.errorMessage = "Password must be at least 8 characters long.";
-        this.loading = false; // Stop loading
-        return;
+    if (this.newUser.password !== this.newUser.confirmPassword) {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Validation Error',
+        detail: 'Passwords do not match'
+      });
+      return;
     }
 
-    this.loading = true; // Indicate loading state
+    // Map the role properly - ensure admin is assigned correctly
+    let tenantRole = 'operator'; // default
+    if (this.newUser.selectedRole === 'admin') {
+      tenantRole = 'admin';
+    } 
 
-    const userData: CreateTenantUserData = {
-        username: this.newUser.username,
-        password: this.newUser.password,
-        email: this.newUser.email || undefined,
-        role_in_tenant: this.newUser.role_in_tenant,
-        // Ensure no extra fields are being sent unless the backend expects them
+    // Prepare data for API
+    const userData = {
+      username: this.newUser.username,
+      password: this.newUser.password,
+      email: this.newUser.email,
+      first_name: this.newUser.accountName,
+      tenant_role: tenantRole, // Use the mapped role
+      require_password_change: this.newUser.requireChangeOnLogin,
+      allow_admin_reset: this.newUser.allowAdminReset,
+      policy_id: this.newUser.selectedPolicy
     };
 
-    // *** Log the exact data being sent to the backend ***
-    console.log('UsersComponent: Sending userData to backend:', userData);
+    console.log('Creating user with data:', userData);
 
-    this.userService.createUser(userData).subscribe({
-      next: (createdUser) => {
-        console.log('UsersComponent: Successfully created user (API response):', createdUser);
-        // ... mapping logic ...
-        const mappedUser = {
-            ...createdUser,
-            name: createdUser.username || createdUser.email,
-            accountName: this.newUser.accountName || '', // Use form value if backend doesn't return it
-            tenant: this.authService.getCurrentTenantDomain()?.split('.')[0] || 'N/A',
-            onlineDevices: 0, // Default for new user
-            devices: 0, // Default for new user
-            emailAddress: createdUser.email,
-            emailReports: 'N/A', // Default
-            protectedItemsQuota: 'N/A', // Default
-            storageVaultSize: 'N/A', // Default
-            storageVaultQuota: 'N/A', // Default
-            policy: this.newUser.selectedPolicy || '(none)' // Use form value
-        };
-        this.users = [...this.users, mappedUser]; // Add mapped user to list locally
-        this.loading = false;
-        this.hideAddUserDialog();
-        console.log('UsersComponent: User added to local list and dialog hidden.');
+    // Make API call
+    this.apiService.post('users/create/', userData).subscribe({
+      next: (response) => {
+        this.messageService.add({
+          severity: 'success',
+          summary: 'User Created',
+          detail: `User ${this.newUser.username} was created successfully`
+        });
+        
+        // Close dialog and refresh list
+        this.addUserDialogVisible = false;
+        this.resetNewUser();
+        this.loadUsers();
       },
       error: (err) => {
-         console.error('UsersComponent: Failed to add user (API error object):', err); // Log the whole error object
-         // *** Log the detailed validation errors from the backend response body ***
-         console.error('UsersComponent: Backend validation errors:', err.error);
-         this.errorMessage = 'Failed to add user. Please check the details.';
-         // Optionally format the backend errors for display
-         if (err.error && typeof err.error === 'object') {
-             this.errorMessage = Object.entries(err.error)
-                                      .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
-                                      .join('; ');
-         } else if (err.message) {
-             this.errorMessage = err.message;
-         }
-         this.loading = false;
+        console.error('Failed to create user:', err);
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: err.error?.detail || err.message || 'Failed to create user'
+        });
       }
     });
   }
-  // --- End Add User Dialog Methods ---
 
-  // --- Placeholder methods ---
-  addUserGroup(): void {
-    console.log('Add User Group clicked');
-    // TODO: Implement logic
+  confirmDeleteUser(user: any) {
+    this.confirmationService.confirm({
+      message: `Are you sure you want to delete the user "${user.name}"?`,
+      accept: () => {
+        this.deleteUser(user);
+      }
+    });
   }
 
-  sendBulletin(): void {
-    console.log('Send Client Bulletin clicked');
-    // TODO: Implement logic
+  deleteUser(user: any) {
+    this.apiService.delete(`users/sub-users/${user.id}/`).subscribe({
+      next: () => {
+        this.messageService.add({
+          severity: 'success', 
+          summary: 'User Deleted', 
+          detail: `User ${user.name} was deleted successfully`
+        });
+        this.loadUsers();
+      },
+      error: (err) => {
+        console.error('Failed to delete user:', err);
+        this.messageService.add({
+          severity: 'error', 
+          summary: 'Error', 
+          detail: `Failed to delete user: ${err.error?.detail || err.message || 'Unknown error'}`
+        });
+      }
+    });
   }
 
-  deleteSelectedUsers(): void {
-    console.log('Deleting selected users:', this.selectedUsers);
-    // TODO: Implement bulk delete logic using confirmation service and userService.deleteUser
+  applyFilter(table: any, event: any) {
+    table.filterGlobal(event.target.value, 'contains');
   }
 
-  disableSelectedUsers(): void {
-    console.log('Disabling selected users:', this.selectedUsers);
-    // TODO: Implement bulk disable logic (likely involves userService.updateUser)
+  addUserGroup() {
+    // Implementation placeholder
   }
 
-  exportData(format: string): void {
-    console.log(`Exporting data as ${format}`);
-    // TODO: Implement export logic (e.g., using a library like xlsx or papaparse)
+  sendBulletin() {
+    // Implementation placeholder
   }
 
-  customizeView(): void {
-    console.log('Customize View clicked');
-    // TODO: Implement column customization logic (e.g., using a dialog with checkboxes)
+  logout(): void {
+    this.authService.logout().subscribe({
+      next: () => {
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Logged Out',
+          detail: 'You have been successfully logged out'
+        });
+        setTimeout(() => {
+          this.router.navigate(['/login']);
+        }, 500);
+      },
+      error: (err) => {
+        console.error('Error during logout:', err);
+        this.router.navigate(['/login']);
+      }
+    });
   }
 
-  // Method to apply filter globally on the table
-  applyFilter(table: any, event: Event) {
-    const inputElement = event.target as HTMLInputElement;
-    table.filterGlobal(inputElement.value, 'contains');
+  getRoleDisplayName(role: string): string {
+    switch(role) {
+      case 'tenant_owner': return 'Owner';
+      case 'tenant_admin': return 'Admin';
+      case 'tenant_member': return 'Operator';
+      default: return role || 'Unknown';
+    }
   }
 }
