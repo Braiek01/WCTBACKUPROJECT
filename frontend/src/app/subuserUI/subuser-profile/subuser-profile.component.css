@@ -111,23 +111,25 @@
 
 /* PrimeNG Style Overrides */
 :host ::ng-deep .p-tabview .p-tabview-nav {
-  background-color: #2d3035;
+  background: #2d3035;
+  border: 1px solid #383838;
+  border-width: 0 0 1px 0;
 }
 
 :host ::ng-deep .p-tabview .p-tabview-nav li .p-tabview-nav-link {
-  background-color: #2d3035;
-  color: white;
+  color: #fff;
+  background: #2d3035;
+  border: 1px solid #383838;
+  border-width: 0 0 2px 0;
 }
 
 :host ::ng-deep .p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link {
-  background-color: #3f4550;
+  color: #fff;
   border-color: #3186ea;
-  color: white;
 }
 
 :host ::ng-deep .p-tabview .p-tabview-panels {
-  background-color: #2d3035;
-  color: white;
+  background: #2d3035;
   padding: 1.5rem;
 }
 
@@ -136,25 +138,65 @@
 }
 
 :host ::ng-deep .p-inputtext {
-  background-color: #23272f;
+  background-color: #383838;
   color: white;
-  border: 1px solid #374151;
+  border-color: #4f5b69;
 }
 
-:host ::ng-deep .p-divider .p-divider-content {
-  background-color: #2d3035;
+:host ::ng-deep .p-inputtext:enabled:focus {
+  box-shadow: 0 0 0 1px #3186ea;
+  border-color: #3186ea;
 }
 
-:host ::ng-deep .p-password .p-password-panel {
+:host ::ng-deep .p-dropdown {
+  background-color: #383838;
+  color: white;
+  border-color: #4f5b69;
+}
+
+:host ::ng-deep .p-dropdown-panel {
   background-color: #2d3035;
   color: white;
-  border: 1px solid #374151;
+  border: 1px solid #4f5b69;
 }
 
-:host ::ng-deep .p-inputswitch.p-inputswitch-checked .p-inputswitch-slider {
+:host ::ng-deep .p-dropdown-panel .p-dropdown-items .p-dropdown-item {
+  color: white;
+}
+
+:host ::ng-deep .p-dropdown-panel .p-dropdown-items .p-dropdown-item:hover {
+  background-color: #3f4550;
+}
+
+:host ::ng-deep .p-dropdown:not(.p-disabled).p-focus {
+  box-shadow: 0 0 0 1px #3186ea;
+  border-color: #3186ea;
+}
+
+:host ::ng-deep .p-checkbox .p-checkbox-box {
+  background-color: #383838;
+  border-color: #4f5b69;
+}
+
+:host ::ng-deep .p-checkbox .p-checkbox-box.p-highlight {
   background-color: #3186ea;
+  border-color: #3186ea;
 }
 
-:host ::ng-deep .p-inputswitch .p-inputswitch-slider {
-  background-color: #374151;
+:host ::ng-deep .p-inputgroup .p-inputtext:not(:first-child) {
+  border-left: 0;
+}
+
+:host ::ng-deep .p-inputgroup .p-inputtext:not(:last-child) {
+  border-right: 0;
+}
+
+:host ::ng-deep .card {
+  background: #2d3035;
+  border-radius: 8px;
+  box-shadow: 0 2px 1px -1px rgba(0, 0, 0, 0.2), 0 1px 1px 0 rgba(0, 0, 0, 0.14), 0 1px 3px 0 rgba(0, 0, 0, 0.12);
+}
+
+:host ::ng-deep p-divider .p-divider.p-divider-horizontal:before {
+  border-top: 1px solid #4f5b69;
 }

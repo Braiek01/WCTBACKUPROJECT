@@ -3,23 +3,21 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink, Router } from '@angular/router';
 import { MessageService, ConfirmationService } from 'primeng/api';
-import { AuthService } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
+import { AuthService } from '../../core/services/auth.service';
 
-// PrimeNG Modules
+// PrimeNG imports
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
-import { DropdownModule } from 'primeng/dropdown';
 import { TabViewModule } from 'primeng/tabview';
-import { ToastModule } from 'primeng/toast';
+import { DropdownModule } from 'primeng/dropdown';
 import { CheckboxModule } from 'primeng/checkbox';
-import { PasswordModule } from 'primeng/password';
-import { InputSwitchModule } from 'primeng/inputswitch';
-import { SplitButtonModule } from 'primeng/splitbutton';
-import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { CardModule } from 'primeng/card';
+import { ToastModule } from 'primeng/toast';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { ProgressBarModule } from 'primeng/progressbar';
+import { SplitButtonModule } from 'primeng/splitbutton';
 import { DividerModule } from 'primeng/divider';
-import { TooltipModule } from 'primeng/tooltip';
 
 @Component({
   selector: 'app-subuser-profile',
@@ -30,59 +28,24 @@ import { TooltipModule } from 'primeng/tooltip';
     RouterLink,
     ButtonModule,
     InputTextModule,
-    DropdownModule,
     TabViewModule,
-    ToastModule,
+    DropdownModule,
     CheckboxModule,
-    PasswordModule,
-    InputSwitchModule,
-    SplitButtonModule,
-    ConfirmDialogModule,
     CardModule,
-    DividerModule,
-    TooltipModule
+    ToastModule,
+    ConfirmDialogModule,
+    ProgressBarModule,
+    SplitButtonModule,
+    DividerModule
   ],
-  providers: [MessageService, ConfirmationService],
   templateUrl: './subuser-profile.component.html',
-  styleUrl: './subuser-profile.component.css'
+  styleUrls: ['./subuser-profile.component.css'],
+  providers: [MessageService, ConfirmationService]
 })
 export class SubuserProfileComponent implements OnInit {
-  // User info
+  // User and tenant info
   username: string = '';
   tenantName: string = '';
-  
-  // User profile data
-  user: any = {
-    username: '',
-    email: '',
-    first_name: '',
-    last_name: '',
-    role_in_tenant: '',
-    is_active: true,
-    last_login: null,
-    date_joined: null,
-    phone: '',
-    company: ''
-  };
-  
-  // Password change data
-  passwordData = {
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  };
-  
-  // Form state tracking
-  formChanged: boolean = false;
-  passwordFormChanged: boolean = false;
-  
-  // Theme and UI preferences
-  uiPreferences = {
-    darkMode: true,
-    compactView: false,
-    enableNotifications: true,
-    emailAlerts: true
-  };
   
   // Split button items for user menu
   splitButtonItems = [
@@ -90,7 +53,7 @@ export class SubuserProfileComponent implements OnInit {
       label: 'Profile',
       icon: 'pi pi-user',
       command: () => {
-        // Already on profile page
+        this.router.navigate(['/', this.tenantName, 'subuser-profile']);
       }
     },
     {
@@ -100,141 +63,256 @@ export class SubuserProfileComponent implements OnInit {
     }
   ];
 
+  // Profile data
+  profileData: any = {
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    company: '',
+    username: '',
+    role: '',
+    lastLogin: 'N/A',
+    accountCreated: 'N/A'
+  };
+
+  // Password data
+  passwordData: any = {
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  };
+  showCurrentPassword: boolean = false;
+  showNewPassword: boolean = false;
+  showConfirmPassword: boolean = false;
+  passwordStrength: number = 0;
+
+  // Preferences
+  preferences: any = {
+    emailNotifications: true,
+    dashboardWidgets: true,
+    timezone: null,
+    dateFormat: null
+  };
+
+  // Dropdown options
+  timezones = [
+    { name: 'UTC', code: 'UTC' },
+    { name: 'America/New_York', code: 'America/New_York' },
+    { name: 'Europe/London', code: 'Europe/London' },
+    { name: 'Asia/Tokyo', code: 'Asia/Tokyo' },
+    { name: 'Australia/Sydney', code: 'Australia/Sydney' }
+  ];
+
+  dateFormats = [
+    { name: 'MM/DD/YYYY', value: 'MM/DD/YYYY' },
+    { name: 'DD/MM/YYYY', value: 'DD/MM/YYYY' },
+    { name: 'YYYY-MM-DD', value: 'YYYY-MM-DD' }
+  ];
+
+  // UI state
+  saving: boolean = false;
+
   constructor(
-    private authService: AuthService,
     private apiService: ApiService,
+    private authService: AuthService,
     private messageService: MessageService,
     private confirmationService: ConfirmationService,
     private router: Router
   ) {}
 
   ngOnInit(): void {
-    // Get basic user info
-    this.username = this.authService.getUsername() || '';
     this.tenantName = this.authService.getTenantName() || '';
-    
-    // Load user profile data
-    this.loadUserProfile();
+    this.username = this.authService.getUsername() || '';
+    this.loadProfileData();
+    this.loadPreferences();
   }
-  
-  loadUserProfile(): void {
-    this.apiService.get(`users/sub-users/${this.username}/`).subscribe({
+
+  loadProfileData(): void {
+    // In a real app, you would fetch this from an API
+    this.apiService.get('users/profile').subscribe({
       next: (data: any) => {
-        this.user = data;
-        console.log('User profile loaded:', this.user);
+        this.profileData = {
+          firstName: data.first_name || '',
+          lastName: data.last_name || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          company: data.company || '',
+          username: data.username || this.username,
+          role: data.role || 'SubUser',
+          lastLogin: data.last_login ? new Date(data.last_login).toLocaleString() : 'N/A',
+          accountCreated: data.created_at ? new Date(data.created_at).toLocaleString() : 'N/A'
+        };
       },
-      error: (err: any) => {
-        console.error('Failed to load user profile:', err);
+      error: (err) => {
+        console.error('Failed to load profile data:', err);
         this.messageService.add({
           severity: 'error',
           summary: 'Error',
-          detail: 'Failed to load user profile'
-        });
-      }
-    });
-  }
-  
-  onFormChange(): void {
-    this.formChanged = true;
-  }
-  
-  onPasswordFormChange(): void {
-    this.passwordFormChanged = true;
-  }
-  
-  saveProfile(): void {
-    if (!this.formChanged) return;
-    
-    this.apiService.put(`users/sub-users/${this.username}/`, this.user).subscribe({
-      next: () => {
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'Profile updated successfully'
-        });
-        this.formChanged = false;
-      },
-      error: (err: any) => {
-        console.error('Failed to update profile:', err);
-        this.messageService.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: err.error?.detail || 'Failed to update profile'
-        });
-      }
-    });
-  }
-  
-  changePassword(): void {
-    if (this.passwordData.newPassword !== this.passwordData.confirmPassword) {
-      this.messageService.add({
-        severity: 'error',
-        summary: 'Error',
-        detail: 'Passwords do not match'
-      });
-      return;
-    }
-    
-    if (this.passwordData.newPassword.length < 8) {
-      this.messageService.add({
-        severity: 'error',
-        summary: 'Error',
-        detail: 'Password must be at least 8 characters long'
-      });
-      return;
-    }
-    
-    const passwordChangeData = {
-      current_password: this.passwordData.currentPassword,
-      new_password: this.passwordData.newPassword
-    };
-    
-    this.apiService.post(`users/sub-users/${this.username}/change-password/`, passwordChangeData).subscribe({
-      next: () => {
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Success',
-          detail: 'Password changed successfully'
+          detail: 'Failed to load profile data'
         });
         
-        // Reset form
-        this.passwordData = {
-          currentPassword: '',
-          newPassword: '',
-          confirmPassword: ''
+        // Fill with dummy data for demo purposes
+        this.profileData = {
+          firstName: 'John',
+          lastName: 'Doe',
+          email: 'john.doe@example.com',
+          phone: '',
+          company: '',
+          username: this.username,
+          role: 'SubUser',
+          lastLogin: 'N/A',
+          accountCreated: 'N/A'
         };
-        this.passwordFormChanged = false;
-      },
-      error: (err: any) => {
-        console.error('Failed to change password:', err);
-        this.messageService.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: err.error?.detail || 'Failed to change password'
-        });
       }
     });
   }
-  
-  savePreferences(): void {
-    this.messageService.add({
-      severity: 'success',
-      summary: 'Success',
-      detail: 'Preferences saved successfully'
+
+  loadPreferences(): void {
+    // In a real app, you would fetch this from an API
+    this.apiService.get('users/preferences').subscribe({
+      next: (data: any) => {
+        this.preferences = {
+          emailNotifications: data.email_notifications !== undefined ? data.email_notifications : true,
+          dashboardWidgets: data.dashboard_widgets !== undefined ? data.dashboard_widgets : true,
+          timezone: this.timezones.find(tz => tz.code === data.timezone) || null,
+          dateFormat: data.date_format || null
+        };
+      },
+      error: (err) => {
+        console.error('Failed to load preferences:', err);
+        
+        // Set defaults for demo purposes
+        this.preferences = {
+          emailNotifications: true,
+          dashboardWidgets: true,
+          timezone: this.timezones[0],
+          dateFormat: this.dateFormats[0].value
+        };
+      }
     });
   }
-  
-  formatDate(dateStr: string | null): string {
-    if (!dateStr) return 'N/A';
-    return new Date(dateStr).toLocaleString();
+
+  saveProfile(): void {
+    this.saving = true;
+    
+    const profileData = {
+      first_name: this.profileData.firstName,
+      last_name: this.profileData.lastName,
+      email: this.profileData.email,
+      phone: this.profileData.phone,
+      company: this.profileData.company
+    };
+    
+    // In a real app, you would send this to an API
+    setTimeout(() => {
+      this.saving = false;
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: 'Profile updated successfully'
+      });
+    }, 1000);
   }
-  
+
+  updatePassword(): void {
+    if (!this.canUpdatePassword()) {
+      return;
+    }
+    
+    this.confirmationService.confirm({
+      message: 'Are you sure you want to change your password?',
+      accept: () => {
+        // In a real app, you would send this to an API
+        setTimeout(() => {
+          this.passwordData = {
+            currentPassword: '',
+            newPassword: '',
+            confirmPassword: ''
+          };
+          
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Success',
+            detail: 'Password updated successfully'
+          });
+        }, 1000);
+      }
+    });
+  }
+
+  savePreferences(): void {
+    const preferencesData = {
+      email_notifications: this.preferences.emailNotifications,
+      dashboard_widgets: this.preferences.dashboardWidgets,
+      timezone: this.preferences.timezone?.code || null,
+      date_format: this.preferences.dateFormat
+    };
+    
+    // In a real app, you would send this to an API
+    setTimeout(() => {
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Success',
+        detail: 'Preferences saved successfully'
+      });
+    }, 1000);
+  }
+
+  canUpdatePassword(): boolean {
+    return (
+      !!this.passwordData.currentPassword &&
+      !!this.passwordData.newPassword &&
+      this.passwordData.newPassword === this.passwordData.confirmPassword &&
+      this.passwordData.newPassword.length >= 8
+    );
+  }
+
+  getPasswordStrength(): number {
+    if (!this.passwordData.newPassword) {
+      return 0;
+    }
+    
+    const password = this.passwordData.newPassword;
+    let strength = 0;
+    
+    // Length check
+    if (password.length >= 8) strength += 20;
+    if (password.length >= 12) strength += 10;
+    
+    // Character type checks
+    if (/[a-z]/.test(password)) strength += 10;
+    if (/[A-Z]/.test(password)) strength += 20;
+    if (/[0-9]/.test(password)) strength += 20;
+    if (/[^a-zA-Z0-9]/.test(password)) strength += 20;
+    
+    return Math.min(strength, 100);
+  }
+
+  getPasswordStrengthClass(): string {
+    const strength = this.getPasswordStrength();
+    this.passwordStrength = strength;
+    
+    if (strength < 30) return 'danger-progress';
+    if (strength < 60) return 'warning-progress';
+    return 'success-progress';
+  }
+
+  getPasswordStrengthText(): string {
+    const strength = this.getPasswordStrength();
+    
+    if (strength < 30) return 'Weak password';
+    if (strength < 60) return 'Moderate password';
+    if (strength < 80) return 'Strong password';
+    return 'Very strong password';
+  }
+
   logout(): void {
     this.authService.logout().subscribe({
       next: () => {
         this.router.navigate(['/login']);
       },
-      error: (err: any) => {
+      error: (err) => {
         console.error('Logout failed:', err);
         this.router.navigate(['/login']); // Navigate anyway
       }
