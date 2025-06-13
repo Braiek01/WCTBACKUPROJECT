@@ -1,0 +1,217 @@
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
+
+<p-toast></p-toast>
+<p-confirmDialog [style]="{width: '450px'}" header="Confirm" icon="pi pi-exclamation-triangle"></p-confirmDialog>
+
+<!-- Top Navigation Bar (Fixed) -->
+<div id="topbar" class="flex align-items-center justify-content-end px-5 py-3 border-bottom-1 surface-border"
+     style="background:#111317; position:fixed; top:0; left:0; right:0; height:64px; z-index:1001;">
+  <div class="flex align-items-center gap-4">
+    <p-splitButton 
+      [label]="username" 
+      icon="pi pi-user" 
+      class="p-button-text p-button-rounded p-button-plain text-white"
+      [model]="splitButtonItems"
+      [style]="{ width: 'auto' }"
+    ></p-splitButton>
+  </div>
+</div>
+
+<!-- Sidebar (Fixed) -->
+<aside id="sidebar" class="flex flex-column justify-content-between"
+       style="position:fixed; top:64px; left:0; width:260px; height:calc(100vh - 64px); background:#111317; z-index:1000;">
+  <div>
+    <div class="flex align-items-center px-4 py-4 border-bottom-1 surface-border">
+      <img src="/whitecapebcklogo.png" alt="Logo" height="65" />
+    </div>
+    
+    <!-- Navigation -->
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'suboverview']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-home mr-2"></i>
+          <span>Home</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'subbackup']" class="flex align-items-center px-4 py-3 text-white bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-database mr-2"></i>
+          <span>Backup</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'subrestore']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-replay mr-2"></i>
+          <span>Restore</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0 mb-4">
+      <li>
+        <a [routerLink]="['/', tenantName, 'subjob-logs']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-history mr-2"></i>
+          <span>Job logs</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</aside>
+
+<!-- Main Content Area -->
+<main style="
+    position: fixed;
+    top: 64px;
+    left: 260px;
+    width: calc(100vw - 260px);
+    height: calc(100vh - 64px);
+    background: #23272f;
+    padding: 2rem;
+    overflow: auto;
+">
+  <!-- Page Header -->
+  <div class="flex justify-content-between align-items-center mb-4">
+    <div>
+      <h2 class="text-3xl font-bold text-white mb-0">Backup Management</h2>
+      <p class="text-400 mt-1">Manage your backup jobs and schedules</p>
+    </div>
+    <div class="flex gap-2">
+      <button pButton icon="pi pi-plus" label="Create Backup" class="p-button-success" (click)="showBackupDialog()"></button>
+      <button pButton icon="pi pi-refresh" class="p-button-outlined p-button-secondary" (click)="loadBackups()"></button>
+    </div>
+  </div>
+
+  <!-- Backup Table -->
+  <p-table 
+    #dt
+    [value]="backups" 
+    [rows]="10" 
+    [paginator]="true"
+    [rowsPerPageOptions]="[5, 10, 25, 50]"
+    [loading]="loading"
+    [(selection)]="selectedBackups"
+    [rowHover]="true"
+    dataKey="id"
+    styleClass="p-datatable-sm"
+    [globalFilterFields]="['name', 'type', 'status', 'created_at']"
+    responsiveLayout="scroll"
+  >
+    <ng-template pTemplate="caption">
+      <div class="flex justify-content-between flex-wrap">
+        <div class="flex align-items-center justify-content-between">
+          <button pButton label="Delete Selected" icon="pi pi-trash" class="p-button-danger" 
+                  [disabled]="!selectedBackups || !selectedBackups.length"
+                  (click)="confirmDeleteBackup(selectedBackups)"></button>
+        </div>
+        <span class="p-input-icon-left ml-auto">
+          <i class="pi pi-search"></i>
+          <input pInputText type="text" placeholder="Search backups..." (input)="applyFilter($event)"/>
+        </span>
+      </div>
+    </ng-template>
+    
+    <ng-template pTemplate="header">
+      <tr>
+        <th style="width: 3rem">
+          <p-tableHeaderCheckbox></p-tableHeaderCheckbox>
+        </th>
+        <th pSortableColumn="name">Name <p-sortIcon field="name"></p-sortIcon></th>
+        <th pSortableColumn="type">Type <p-sortIcon field="type"></p-sortIcon></th>
+        <th pSortableColumn="target">Target <p-sortIcon field="target"></p-sortIcon></th>
+        <th pSortableColumn="size">Size <p-sortIcon field="size"></p-sortIcon></th>
+        <th pSortableColumn="status">Status <p-sortIcon field="status"></p-sortIcon></th>
+        <th pSortableColumn="created_at">Created <p-sortIcon field="created_at"></p-sortIcon></th>
+        <th style="width: 8rem">Actions</th>
+      </tr>
+    </ng-template>
+    
+    <ng-template pTemplate="body" let-backup>
+      <tr>
+        <td>
+          <p-tableCheckbox [value]="backup"></p-tableCheckbox>
+        </td>
+        <td>
+          <span class="font-medium">{{ backup.name }}</span>
+        </td>
+        <td>
+          <span class="badge">{{ backup.type }}</span>
+        </td>
+        <td>{{ backup.target }}</td>
+        <td>{{ backup.size }}</td>
+        <td>
+          <p-tag [value]="getStatusLabel(backup.status)" [severity]="getStatusSeverity(backup.status)"></p-tag>
+        </td>
+        <td>{{ formatDate(backup.created_at) }}</td>
+        <td>
+          <div class="flex gap-2">
+            <button pButton icon="pi pi-download" class="p-button-rounded p-button-text" 
+                    pTooltip="Download Backup" (click)="downloadBackup(backup)"></button>
+            <button pButton icon="pi pi-trash" class="p-button-rounded p-button-danger p-button-text" 
+                    pTooltip="Delete Backup" (click)="confirmDeleteBackup(backup)"></button>
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+    
+    <ng-template pTemplate="emptymessage">
+      <tr>
+        <td colspan="8" class="text-center p-4">
+          <div class="flex flex-column align-items-center">
+            <i class="pi pi-folder-open text-5xl text-400 mb-3"></i>
+            <span class="text-xl text-400">No backups found</span>
+            <span class="text-sm text-400 mt-2">Create a backup job to get started</span>
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</main>
+
+<!-- Backup Dialog -->
+<p-dialog [(visible)]="backupDialogVisible" [style]="{width: '600px'}" header="Create Backup" [modal]="true" styleClass="p-fluid">
+  <div class="grid">
+    <div class="col-12">
+      <div class="field">
+        <label for="backupName">Backup Name</label>
+        <input id="backupName" type="text" pInputText [(ngModel)]="backupName" required>
+      </div>
+    </div>
+    
+    <div class="col-12">
+      <div class="field">
+        <label for="backupType">Backup Type</label>
+        <p-dropdown id="backupType" [options]="backupTypes" [(ngModel)]="selectedBackupType" optionLabel="label" optionValue="value" styleClass="w-full"></p-dropdown>
+      </div>
+    </div>
+    
+    <div class="col-12">
+      <div class="field">
+        <label for="targetHosts">Target Hosts</label>
+        <input id="targetHosts" type="text" pInputText [(ngModel)]="targetHosts" placeholder="e.g. localhost,server1">
+      </div>
+    </div>
+    
+    <div class="col-12">
+      <div class="field">
+        <label for="extraVars">Extra Variables</label>
+        <textarea id="extraVars" rows="3" pInputTextarea [(ngModel)]="extraVars" placeholder="key1=value1,key2=value2"></textarea>
+      </div>
+    </div>
+    
+    <div class="col-12">
+      <div class="field">
+        <label for="publicKey">SSH Public Key</label>
+        <textarea id="publicKey" rows="3" pInputTextarea [(ngModel)]="publickey" placeholder="Optional: SSH public key for authentication"></textarea>
+      </div>
+    </div>
+  </div>
+  
+  <ng-template pTemplate="footer">
+    <button pButton pRipple label="Cancel" icon="pi pi-times" class="p-button-text" (click)="hideBackupDialog()"></button>
+    <button pButton pRipple label="Create" icon="pi pi-check" class="p-button-text" (click)="runBackupPlaybook()"></button>
+  </ng-template>
+</p-dialog>

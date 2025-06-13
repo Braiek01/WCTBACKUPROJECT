@@ -1,0 +1,105 @@
+:host ::ng-deep .p-datatable .p-datatable-thead > tr > th {
+  background: #1e1e1e;
+  color: white;
+  border-color: #383838;
+}
+
+:host ::ng-deep .p-datatable .p-datatable-tbody > tr {
+  background: #2a2a2a;
+  color: white;
+  border-color: #383838;
+}
+
+:host ::ng-deep .p-datatable .p-datatable-tbody > tr > td {
+  border-color: #383838;
+}
+
+:host ::ng-deep .p-paginator {
+  background: #1e1e1e;
+  color: white;
+  border-color: #383838;
+}
+
+:host ::ng-deep .p-dropdown-panel {
+  background: #2a2a2a;
+  border-color: #383838;
+}
+
+:host ::ng-deep .p-dropdown-panel .p-dropdown-items .p-dropdown-item {
+  color: white;
+}
+
+:host ::ng-deep .p-dropdown-panel .p-dropdown-items .p-dropdown-item:hover {
+  background: #3186ea;
+}
+
+:host ::ng-deep .storage-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.875rem;
+  background: #3186ea;
+}
+
+:host ::ng-deep .badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.875rem;
+  background: #3186ea;
+}
+
+:host ::ng-deep .p-dialog .p-dialog-header {
+  background: #1e1e1e;
+  color: white;
+  border-color: #383838;
+}
+
+:host ::ng-deep .p-dialog .p-dialog-content {
+  background: #2a2a2a;
+  color: white;
+  border-color: #383838;
+}
+
+:host ::ng-deep .p-dialog .p-dialog-footer {
+  background: #1e1e1e;
+  color: white;
+  border-color: #383838;
+}
+
+:host ::ng-deep .p-inputtext {
+  background: #383838;
+  color: white;
+  border-color: #555;
+}
+
+:host ::ng-deep .p-inputtext:enabled:focus {
+  box-shadow: 0 0 0 1px #3186ea;
+  border-color: #3186ea;
+}
+
+:host ::ng-deep .p-dropdown {
+  background: #383838;
+  color: white;
+  border-color: #555;
+}
+
+:host ::ng-deep .p-dropdown:not(.p-disabled).p-focus {
+  box-shadow: 0 0 0 1px #3186ea;
+  border-color: #3186ea;
+}
+
+:host ::ng-deep .p-dropdown-panel .p-dropdown-header {
+  background: #1e1e1e;
+  color: white;
+  border-color: #383838;
+}
+
+:host ::ng-deep .p-dropdown-panel .p-dropdown-items {
+  background: #2a2a2a;
+  color: white;
+}

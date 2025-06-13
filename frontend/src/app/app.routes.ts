@@ -32,6 +32,7 @@ export const routes: Routes = [
     path: ':tenantName', 
     canActivate: [tenantGuard, authGuard],
     children: [
+      // Tenant admin routes
       {
         path: 'setup',
         component: SetupWizardComponent
@@ -45,12 +46,6 @@ export const routes: Routes = [
         path: 'users',
         loadComponent: () => import('./tenantUI/users/users.component')
           .then(m => m.UsersComponent),
-        canActivate: [authGuard]
-      },
-      {
-        path: 'suboverview',
-        loadComponent: () => import('./subuserUI/suboverview/suboverview.component')
-          .then(m => m.SuboverviewComponent),
         canActivate: [authGuard]
       },
       {
@@ -95,14 +90,37 @@ export const routes: Routes = [
         canActivate: [authGuard]
       },
       
+      // SubUser routes
+      {
+        path: 'suboverview',
+        loadComponent: () => import('./subuserUI/suboverview/suboverview.component')
+          .then(m => m.SuboverviewComponent),
+        canActivate: [authGuard]
+      },
+      {
+        path: 'subbackup',
+        loadComponent: () => import('./subuserUI/subbackup/subbackup.component')
+          .then(m => m.SubbackupComponent),
+        canActivate: [authGuard]
+      },
+      {
+        path: 'subrestore',
+        loadComponent: () => import('./subuserUI/subrestore/subrestore.component')
+          .then(m => m.SubrestoreComponent),
+        canActivate: [authGuard]
+      },
+      {
+        path: 'subjob-logs',
+        loadComponent: () => import('./subuserUI/subjoblogs/subjoblogs.component')
+          .then(m => m.SubjoblogsComponent),
+        canActivate: [authGuard]
+      },
+      {
+        path: 'subuser-profile',
+          loadComponent: () => import('./subuserUI/subuser-profile/subuser-profile.component').then(m => m.SubuserProfileComponent),
+        canActivate: [authGuard]      },
       
-      //{
-       // path: 'settings',
-       // loadComponent: () => import('../tenantUI/settings/settings.component')
-         // .then(m => m.SettingsComponent),
-       // canActivate: [authGuard]
-     // },
-      // Add other tenant routes here
+      // Default route
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' }
     ]
   },
