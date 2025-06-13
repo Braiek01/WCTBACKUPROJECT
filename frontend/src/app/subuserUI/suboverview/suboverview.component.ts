@@ -1,93 +1,67 @@
-import { ChartModule } from 'primeng/chart';
-import { CardModule } from 'primeng/card';
-import { ButtonModule } from 'primeng/button';
-import { SplitButtonModule } from 'primeng/splitbutton';
-import { DialogModule} from 'primeng/dialog';
-import { InputTextModule} from 'primeng/inputtext';
-import { DropdownModule} from 'primeng/dropdown';
-import { Component, OnInit, Inject, PLATFORM_ID, OnDestroy, inject } from '@angular/core'; 
-import { CreateBackupJobData } from '../../core/services/job.service';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { InputGroupModule } from 'primeng/inputgroup'; // Import InputGroupModule
-import { InputGroupAddonModule } from 'primeng/inputgroupaddon'; // Import InputGroupAddonModule
 import { FormsModule } from '@angular/forms';
-import { InputTextarea } from 'primeng/inputtextarea';
-import { AuthService } from '../../core/services/auth.service'; // Adjust the path as necessary
-import { Router } from '@angular/router';
-import { ToastModule } from 'primeng/toast';
+import { RouterLink, Router } from '@angular/router';
+import { AuthService } from '../../core/services/auth.service';
+import { ApiService } from '../../core/services/api.service';
 import { MessageService } from 'primeng/api';
-import { RouterModule } from '@angular/router';
 
+// PrimeNG Imports
+import { ButtonModule } from 'primeng/button';
+import { CardModule } from 'primeng/card';
+import { ChartModule } from 'primeng/chart';
+import { DialogModule } from 'primeng/dialog';
+import { DropdownModule } from 'primeng/dropdown';
+import { InputTextModule } from 'primeng/inputtext';
+import { SplitButtonModule } from 'primeng/splitbutton';
+import { TabViewModule } from 'primeng/tabview';
+import { TagModule } from 'primeng/tag';
+import { ToastModule } from 'primeng/toast';
+import { AccordionModule } from 'primeng/accordion';
+import { TimelineModule } from 'primeng/timeline';
+import { DividerModule } from 'primeng/divider';
 
 @Component({
   selector: 'app-suboverview',
-  imports: [ChartModule , ButtonModule , CardModule 
-    , SplitButtonModule , DialogModule , InputTextModule ,  RouterModule , DropdownModule , CommonModule , InputGroupModule , InputGroupAddonModule , FormsModule , InputTextarea , ToastModule],
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    ButtonModule,
+    CardModule,
+    ChartModule,
+    DialogModule,
+    DropdownModule,
+    InputTextModule,
+    SplitButtonModule,
+    TabViewModule,
+    TagModule,
+    ToastModule,
+    AccordionModule,
+    TimelineModule,
+    DividerModule
+  ],
   templateUrl: './suboverview.component.html',
-  styleUrls: ['./suboverview.component.css'],
-  providers: [MessageService] // Add if not already there
+  styleUrl: './suboverview.component.css',
+  providers: [MessageService]
 })
 export class SuboverviewComponent implements OnInit {
-
-  // private authService = inject(AuthService);
-  // private router = inject(Router);
-  // private messageService = inject(MessageService);
-
+  // User info
   username: string = '';
-  tenantDomain: string = ''; // Add this property to the class
-  tenantName: string = ''; // Add tenantName property
-  backupDialogVisible = false;
-  backupName = '';
-  targetHosts = '';
-  playbookPath = '/etc/ansible/playbooks/backup_playbook.yml'; // Default path
-  extraVars = '';
-  publickey="";
-  backupTypes = [
-      { label: 'Full', value: 'full' },
-      { label: 'Differential', value: 'diff' },
-      { label: 'Incremental (Restic)', value: 'restic' }
-
-  ];
-  selectedBackupType = 'restic';
-
-
-
-  currentMonth = new Date().toLocaleString('default', { month: 'long' });
-  currentYear = new Date().getFullYear();
-  lastBackupDate = 'Fri May 2 21:46:33 2025';
-  lastBackupDay = 'May 2';
-  lastBackupMachine = 'server01.example.com';
-
-  usedStorage = '4.60 MB';
-  remainingStorage = '1024.00 GB';
-
-  quotaChartData = {
-    labels: ['Used', 'Remaining'],
-    datasets: [
-      {
-        data: [4.6, 1024],
-        backgroundColor: ['#22c55e', '#e5e7eb'],
-        hoverBackgroundColor: ['#16a34a', '#d1d5db']
-      }
-    ]
-  };
-
-  quotaChartOptions = {
-    cutout: '80%',
-    plugins: {
-      legend: { display: false }
-    }
-  };
-
-
-
-
+  tenantName: string = '';
+  
+  // Date info
+  currentMonth: string = '';
+  currentYear: number = 0;
+  
+  // Split button menu
   splitButtonItems = [
     {
       label: 'Profile',
       icon: 'pi pi-user',
       command: () => {
-        this.router.navigate(['/', this.tenantDomain, 'profile']);
+        this.router.navigate(['/', this.tenantName, 'subuser-profile']);
       }
     },
     {
@@ -96,92 +70,96 @@ export class SuboverviewComponent implements OnInit {
       command: () => this.logout()
     }
   ];
+  
+  // Dashboard data
+  backups: any[] = [];
+  recentActions: any[] = [];
 
   constructor(
     private authService: AuthService,
+    private apiService: ApiService,
     private router: Router,
     private messageService: MessageService
   ) {}
 
-  showBackupDialog() {
-        this.backupDialogVisible = true;
-        // Reset fields if needed
-        this.backupName = '';
-        this.targetHosts = '';
-        // Use a path relative to the backend/ansible/playbooks directory
-        this.playbookPath = 'mysqldump_playbook.yml'; // Default to the mysql dump playbook
-        this.extraVars = '';
-        this.publickey = '';
-        this.selectedBackupType = 'restic'; // Or your preferred default
-      }
-    
-      hideBackupDialog() {
-        this.backupDialogVisible = false;
-      }
-    
-      runBackupPlaybook() {
-       
-    
-        const jobData: CreateBackupJobData = {
-          name: this.backupName,
-          target_hosts: this.targetHosts,
-          playbook_path: this.playbookPath, // Send the relative path
-          backup_type: this.selectedBackupType,
-          extra_vars: this.parseExtraVars(this.extraVars),
-          publickey: this.publickey // Include public key if needed
-        };
-    
-        console.log('Sending job request to backend:', jobData);
-    
-
-   }
-   // Parses extraVars string into an object (expects key=value pairs separated by commas)
-   parseExtraVars(extraVars: string): { [key: string]: string } {
-      if (!extraVars) return {};
-      return extraVars.split(',')
-        .map(pair => pair.trim())
-        .filter(pair => pair.includes('='))
-        .reduce((acc, pair) => {
-          const [key, value] = pair.split('=').map(s => s.trim());
-          acc[key] = value;
-          return acc;
-        }, {} as { [key: string]: string });
-   }
-
-   ngOnInit(): void {
-    
-     
-    // Get username from localStorage
-    const storedUsername = localStorage.getItem('username');
-    if (storedUsername) {
-      this.username = storedUsername;
-    } else {
-      const currentUser = this.authService.getCurrentUser();
-      if (currentUser && currentUser.username) {
-        this.username = currentUser.username;
-      }
-    }
-    
-    // Get tenant domain from the auth service
-    this.tenantDomain = this.authService.getTenantDomain() || '';
-    console.log('Tenant domain in subuser overview:', this.tenantDomain);
-    
-    // Get tenant name instead of domain
+  ngOnInit(): void {
+    // Get user info
+    this.username = this.authService.getUsername() || '';
     this.tenantName = this.authService.getTenantName() || '';
-    console.log('Tenant name:', this.tenantName);
     
-    // Rest of your initialization code...
-}
-
-   // Add logout method
-   logout(): void {
+    // Get current date info
+    const now = new Date();
+    this.currentMonth = now.toLocaleString('default', { month: 'long' });
+    this.currentYear = now.getFullYear();
+    
+    // Load backup data
+    this.loadBackups();
+    this.loadRecentActivity();
+  }
+  
+  loadBackups(): void {
+    // For demo, using mock data
+    this.backups = [
+      { 
+        id: 1, 
+        name: 'Web Server Backup', 
+        status: 'Completed', 
+        created: '2025-06-01',
+        type: 'Restic', 
+        size: '15.2 GB'
+      },
+      { 
+        id: 2, 
+        name: 'Database Backup', 
+        status: 'Warning', 
+        created: '2025-05-25',
+        type: 'Full', 
+        size: '7.8 GB'
+      }
+    ];
+  }
+  
+  loadRecentActivity(): void {
+    // Mock data for recent activities
+    this.recentActions = [
+      { 
+        description: 'Backup "Web Server Backup" completed', 
+        date: '15 minutes ago', 
+        icon: 'pi pi-check-circle', 
+        color: '#689F38', 
+        by: 'System' 
+      },
+      { 
+        description: 'User "' + this.username + '" logged in', 
+        date: '1 hour ago', 
+        icon: 'pi pi-sign-in', 
+        color: '#0288D1', 
+        by: this.username 
+      },
+      { 
+        description: 'Backup "Database Backup" warning', 
+        date: '2 hours ago', 
+        icon: 'pi pi-exclamation-triangle', 
+        color: '#FBC02D', 
+        by: 'Scheduler' 
+      }
+    ];
+  }
+  
+  logout(): void {
     this.authService.logout().subscribe({
       next: () => {
         this.messageService.add({
-          severity: 'success', 
-          summary: 'Logged Out', 
+          severity: 'success',
+          summary: 'Logged Out',
           detail: 'You have been successfully logged out'
         });
+        setTimeout(() => {
+          this.router.navigate(['/login']);
+        }, 1000);
+      },
+      error: (err) => {
+        console.error('Error during logout:', err);
         this.router.navigate(['/login']);
       }
     });
