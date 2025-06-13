@@ -1,0 +1,111 @@
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
+<app-navbar></app-navbar>
+<div class="surface-section w-screen px-4 py-8 md:px-6 lg:px-8">
+  <div class="text-center mb-6">
+    <img src="/whitecapebcklogo.png" alt="Whitecape Backup Logo" height="60" class="mb-3" />
+    <h1 class="text-4xl font-bold mb-2 text-primary">Whitecape Backup Platform Overview</h1>
+    <p class="text-700 text-xl mb-4">Secure, multi-tenant backup and restore platform powered by Restic and Ansible</p>
+  </div>
+
+  <div class="grid text-center mb-6">
+    <div class="col-12 md:col-4 mb-4">
+      <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
+        <i class="pi pi-lock text-4xl text-primary"></i>
+      </span>
+      <div class="text-900 text-xl mb-2 font-medium">Advanced Security</div>
+      <span class="text-700 line-height-3">End-to-end encryption with AES-256, secure key management, and isolated tenant data</span>
+    </div>
+    <div class="col-12 md:col-4 mb-4">
+      <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
+        <i class="pi pi-server text-4xl text-primary"></i>
+      </span>
+      <div class="text-900 text-xl mb-2 font-medium">Flexible Deployment</div>
+      <span class="text-700 line-height-3">No agents required on target systems - just SSH access for efficient backup orchestration</span>
+    </div>
+    <div class="col-12 md:col-4 mb-4">
+      <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
+        <i class="pi pi-database text-4xl text-primary"></i>
+      </span>
+      <div class="text-900 text-xl mb-2 font-medium">Efficient Storage</div>
+      <span class="text-700 line-height-3">Deduplication and incremental backups optimize bandwidth usage and reduce storage costs</span>
+    </div>
+  </div>
+
+  <div class="surface-card p-4 border-round shadow-1 mb-6" style="max-width: 900px; margin: 0 auto;">
+    <h2 class="text-2xl font-semibold mb-3 text-primary">Key Platform Features</h2>
+    <ul class="text-left text-700 text-lg pl-3">
+      <li class="mb-2"><b>Multiple Backup Types:</b> Full, differential, and incremental (Restic) options for maximum flexibility</li>
+      <li class="mb-2"><b>Role-Based Access:</b> Owner/Admin and Operator roles with appropriate permissions for each</li>
+      <li class="mb-2"><b>Automated Scheduling:</b> Set up recurring backup jobs with customizable retention policies</li>
+      <li class="mb-2"><b>Real-time Monitoring:</b> Track job status, view logs, and receive notifications on backup health</li>
+      <li class="mb-2"><b>Azure Storage Integration:</b> Direct support for Azure Blob Storage with optimized transfers</li>
+      <li class="mb-2"><b>Rapid Restore:</b> Easily browse and restore specific files or entire backups from the web interface</li>
+    </ul>
+  </div>
+
+  <div class="grid text-center mb-6">
+    <div class="col-12 md:col-4 mb-4">
+      <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
+        <i class="pi pi-users text-4xl text-primary"></i>
+      </span>
+      <div class="text-900 text-xl mb-2 font-medium">Multi-Tenant Architecture</div>
+      <span class="text-700 line-height-3">Complete isolation between tenants with customizable policies and quotas for each</span>
+    </div>
+    <div class="col-12 md:col-4 mb-4">
+      <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
+        <i class="pi pi-chart-bar text-4xl text-primary"></i>
+      </span>
+      <div class="text-900 text-xl mb-2 font-medium">Analytics Dashboard</div>
+      <span class="text-700 line-height-3">Visualize backup success rates, storage usage, and system health metrics</span>
+    </div>
+    <div class="col-12 md:col-4 mb-4">
+      <span class="p-3 shadow-2 mb-3 inline-block surface-card" style="border-radius: 10px">
+        <i class="pi pi-sync text-4xl text-primary"></i>
+      </span>
+      <div class="text-900 text-xl mb-2 font-medium">Ansible Integration</div>
+      <span class="text-700 line-height-3">Leverage the power of Ansible playbooks for customizable backup operations</span>
+    </div>
+  </div>
+
+  <div class="surface-card p-4 border-round shadow-1 mb-6" style="max-width: 900px; margin: 0 auto;">
+    <h2 class="text-2xl font-semibold mb-3 text-primary">Built on Reliable Technologies</h2>
+    <p class="text-700 mb-4">Our platform builds on Restic's mature backup capabilities, adding an intuitive web interface and enterprise features:</p>
+    <div class="grid">
+      <div class="col-12 md:col-6">
+        <div class="p-3 border-round bg-primary-50">
+          <h3 class="text-primary font-medium">Restic Backend</h3>
+          <ul class="text-700">
+            <li>Fast, secure, reliable backup engine</li>
+            <li>Efficient deduplication algorithms</li>
+            <li>Cross-platform compatibility</li>
+          </ul>
+        </div>
+      </div>
+      <div class="col-12 md:col-6">
+        <div class="p-3 border-round bg-primary-50">
+          <h3 class="text-primary font-medium">Modern Web Interface</h3>
+          <ul class="text-700">
+            <li>Angular frontend with responsive design</li>
+            <li>Real-time status updates and notifications</li>
+            <li>Comprehensive management dashboard</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="text-center mt-6">
+    <h3 class="text-2xl font-semibold mb-2 text-primary">Ready to Get Started?</h3>
+    <p class="text-700 mb-4">Create your account now and secure your systems with our powerful backup platform</p>
+    <div class="flex flex-wrap justify-content-center gap-3">
+      <a href="/signup" class="p-button p-component p-button-raised p-button-primary">
+        <span class="p-button-label">Create Account</span>
+      </a>
+      <a href="/login" class="p-button p-component p-button-outlined">
+        <span class="p-button-label">Login</span>
+      </a>
+    </div>
+  </div>
+</div>
+<app-footer></app-footer>

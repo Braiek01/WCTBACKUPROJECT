@@ -1,0 +1,139 @@
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
+<app-navbar></app-navbar>
+<div class="surface-section w-screen px-4 py-8 md:px-6 lg:px-8" style="min-height: 80vh;">
+  <div class="text-center mb-6">
+    <img src="/whitecapebcklogo.png" alt="Whitecape Backup Logo" height="60" class="mb-3" />
+    <h1 class="text-4xl font-bold mb-2 text-primary">Getting Started Guide</h1>
+    <p class="text-700 text-xl mb-4">Set up your backup environment in just a few simple steps</p>
+  </div>
+
+  <div class="surface-card p-4 border-round shadow-2 mb-6" style="max-width: 900px; margin: 0 auto;">
+    <div class="flex flex-column md:flex-row">
+      <div class="md:w-3">
+        <div class="p-3 text-center">
+          <span class="inline-flex align-items-center justify-content-center border-circle bg-primary-100 text-primary font-bold mb-3" style="width: 50px; height: 50px;">1</span>
+          <h3 class="text-xl font-medium">Create Account</h3>
+        </div>
+      </div>
+      <div class="md:w-9 px-3">
+        <p class="text-700"><b>Sign up for a new account</b> to become the administrator of your organization's tenant. You'll have full access to all features and be able to add additional users as needed.</p>
+        <div class="mt-3 surface-ground border-round p-3">
+          <i class="pi pi-info-circle text-primary mr-2"></i>
+          <span class="text-600">Your account provides access to the admin dashboard with complete analytics and management capabilities.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="surface-card p-4 border-round shadow-2 mb-6" style="max-width: 900px; margin: 0 auto;">
+    <div class="flex flex-column md:flex-row">
+      <div class="md:w-3">
+        <div class="p-3 text-center">
+          <span class="inline-flex align-items-center justify-content-center border-circle bg-primary-100 text-primary font-bold mb-3" style="width: 50px; height: 50px;">2</span>
+          <h3 class="text-xl font-medium">Configure Target Servers</h3>
+        </div>
+      </div>
+      <div class="md:w-9 px-3">
+        <p class="text-700">Add your servers by providing their connection details. The system requires:</p>
+        <ul class="text-700">
+          <li>Server hostname or IP address</li>
+          <li>SSH username for connection</li>
+          <li>SSH public key for authentication</li>
+        </ul>
+        <div class="mt-3 surface-ground border-round p-3">
+          <i class="pi pi-exclamation-triangle text-yellow-500 mr-2"></i>
+          <span class="text-600">Ensure your SSH keys are properly secured. The system uses these keys to perform agentless backups.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="surface-card p-4 border-round shadow-2 mb-6" style="max-width: 900px; margin: 0 auto;">
+    <div class="flex flex-column md:flex-row">
+      <div class="md:w-3">
+        <div class="p-3 text-center">
+          <span class="inline-flex align-items-center justify-content-center border-circle bg-primary-100 text-primary font-bold mb-3" style="width: 50px; height: 50px;">3</span>
+          <h3 class="text-xl font-medium">Set Up Storage</h3>
+        </div>
+      </div>
+      <div class="md:w-9 px-3">
+        <p class="text-700">Configure your backup storage destination. You have two primary options:</p>
+        <div class="grid mt-3">
+          <div class="col-12 md:col-6">
+            <div class="p-3 border-1 border-round">
+              <h4 class="text-primary m-0 mb-2">Azure Blob Storage</h4>
+              <p class="text-700 m-0">Cloud-based storage with scalable capacity and geo-redundancy options</p>
+            </div>
+          </div>
+          <div class="col-12 md:col-6">
+            <div class="p-3 border-1 border-round">
+              <h4 class="text-primary m-0 mb-2">Local Storage</h4>
+              <p class="text-700 m-0">On-premises storage for organizations with specific compliance needs</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="surface-card p-4 border-round shadow-2 mb-6" style="max-width: 900px; margin: 0 auto;">
+    <div class="flex flex-column md:flex-row">
+      <div class="md:w-3">
+        <div class="p-3 text-center">
+          <span class="inline-flex align-items-center justify-content-center border-circle bg-primary-100 text-primary font-bold mb-3" style="width: 50px; height: 50px;">4</span>
+          <h3 class="text-xl font-medium">Create Backup Job</h3>
+        </div>
+      </div>
+      <div class="md:w-9 px-3">
+        <p class="text-700">Create your first backup job through the dashboard:</p>
+        <ol class="text-700">
+          <li>Select the target server</li>
+          <li>Choose backup type (Full, Differential, or Incremental/Restic)</li>
+          <li>Define the backup schedule (if automated)</li>
+          <li>Select storage destination</li>
+          <li>Launch the job</li>
+        </ol>
+        <div class="mt-3 surface-ground border-round p-3">
+          <i class="pi pi-check-circle text-green-500 mr-2"></i>
+          <span class="text-600">Your first backup will establish the baseline for future incremental or differential backups.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="surface-card p-4 border-round shadow-2 mb-6" style="max-width: 900px; margin: 0 auto;">
+    <div class="flex flex-column md:flex-row">
+      <div class="md:w-3">
+        <div class="p-3 text-center">
+          <span class="inline-flex align-items-center justify-content-center border-circle bg-primary-100 text-primary font-bold mb-3" style="width: 50px; height: 50px;">5</span>
+          <h3 class="text-xl font-medium">Manage Users</h3>
+        </div>
+      </div>
+      <div class="md:w-9 px-3">
+        <p class="text-700">Add additional users to your tenant as needed:</p>
+        <ul class="text-700">
+          <li><b>Admin users</b> have full access to all features and settings</li>
+          <li><b>Operator users</b> can perform backup and restore operations but have limited administrative access</li>
+        </ul>
+        <div class="mt-3 surface-ground border-round p-3">
+          <i class="pi pi-shield text-blue-500 mr-2"></i>
+          <span class="text-600">Use role-based access to implement least privilege security principles in your organization.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="text-center mt-6">
+    <h3 class="text-2xl font-medium mb-3 text-primary">Ready to Begin?</h3>
+    <div class="flex justify-content-center gap-3">
+      <a href="/signup" class="p-button p-component p-button-raised p-button-primary">
+        <span class="p-button-label">Create Account</span>
+      </a>
+      <a href="/login" class="p-button p-component p-button-outlined">
+        <span class="p-button-label">Login</span>
+      </a>
+    </div>
+  </div>
+</div>
+<app-footer></app-footer>

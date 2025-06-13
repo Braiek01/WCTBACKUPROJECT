@@ -1,0 +1,419 @@
+<p>restore works!</p>
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
+
+<p-toast></p-toast>
+<p-confirmDialog [style]="{width: '450px'}" header="Confirm Restore" icon="pi pi-exclamation-triangle"></p-confirmDialog>
+
+<!-- Top Navigation Bar (Fixed) -->
+<div id="topbar" class="flex align-items-center justify-content-end px-5 py-3 border-bottom-1 surface-border"
+     style="background:#111317; position:fixed; top:0; left:0; right:0; height:64px; z-index:1001;">
+  <div class="flex align-items-center gap-4">
+    <p-splitButton 
+      [label]="username" 
+      icon="pi pi-user" 
+      class="p-button-text p-button-rounded p-button-plain text-white"
+      [model]="splitButtonItems"
+      [style]="{ width: 'auto' }"
+    ></p-splitButton>
+  </div>
+</div>
+
+<!-- Sidebar (Fixed) -->
+<aside id="sidebar" class="flex flex-column justify-content-between"
+       style="position:fixed; top:64px; left:0; width:260px; height:calc(100vh - 64px); background:#111317; z-index:1000;">
+  <div>
+    <div class="flex align-items-center px-4 py-4 border-bottom-1 surface-border">
+      <img src="/whitecapebcklogo.png" alt="Logo" height="65" />
+    </div>
+    
+    <!-- Navigation -->
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'dashboard']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-home mr-2"></i>
+          <span>Dashboard</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'users']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-users mr-2"></i>
+          <span>Users</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'backups']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-database mr-2"></i>
+          <span>Backups</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'plans']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-calendar mr-2"></i>
+          <span>Plans</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'repos']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-server mr-2"></i>
+          <span>Repos</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'restore']" class="flex align-items-center px-4 py-3 text-white bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-replay mr-2"></i>
+          <span>Restore</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0 mb-4">
+      <li>
+        <a [routerLink]="['/', tenantName, 'job-logs']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-history mr-2"></i>
+          <span>Job logs</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'settings']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-cog mr-2"></i>
+          <span>Settings</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</aside>
+
+<!-- Main Content (Fixed, No Scroll) -->
+<main style="
+    position: fixed;
+    top: 64px;
+    left: 260px;
+    width: calc(100vw - 260px);
+    height: calc(100vh - 64px);
+    background: #23272f;
+    padding: 2rem;
+    overflow: auto;
+">
+  <!-- Header with title -->
+  <div class="flex align-items-center justify-content-between mb-4">
+    <div class="flex align-items-center">
+      <i class="pi pi-replay mr-2 text-2xl"></i>
+      <h2 class="text-2xl font-semibold mb-0 text-white">Restore Backups</h2>
+    </div>
+  </div>
+  
+  <!-- Active Restore Operations Section -->
+  <div class="mb-4" *ngIf="activeRestores && activeRestores.length > 0">
+    <h3 class="text-xl font-semibold mb-2 text-white">Active Restore Operations</h3>
+    
+    <div class="grid">
+      <div class="col-12 md:col-6 lg:col-4" *ngFor="let restore of activeRestores">
+        <p-card styleClass="mb-3">
+          <ng-template pTemplate="header">
+            <div class="flex align-items-center justify-content-between p-3 border-bottom-1 surface-border">
+              <span class="font-semibold">Restore Operation</span>
+              <p-tag [value]="restore.status" 
+                    [severity]="restore.status === 'completed' ? 'success' : 
+                              (restore.status === 'running' ? 'info' : 
+                              (restore.status === 'failed' ? 'danger' : 'warning'))">
+              </p-tag>
+            </div>
+          </ng-template>
+          
+          <div class="grid">
+            <div class="col-12 mb-2">
+              <span class="block text-500 mb-1">Operation ID:</span>
+              <span class="block font-semibold">{{ restore.operation_id }}</span>
+            </div>
+            <div class="col-12 mb-2">
+              <span class="block text-500 mb-1">Started:</span>
+              <span class="block">{{ formatDate(restore.started_at) }}</span>
+            </div>
+            <div class="col-12 mb-2" *ngIf="restore.status === 'running'">
+              <span class="block text-500 mb-1">Progress:</span>
+              <p-progressBar [value]="restore.stats?.progress || 0"></p-progressBar>
+            </div>
+            <div class="col-12 mb-2" *ngIf="restore.completed_at">
+              <span class="block text-500 mb-1">Completed:</span>
+              <span class="block">{{ formatDate(restore.completed_at) }}</span>
+            </div>
+            <div class="col-12 mb-2" *ngIf="restore.error">
+              <span class="block text-500 mb-1">Error:</span>
+              <span class="block text-red-500">{{ restore.error }}</span>
+            </div>
+          </div>
+          
+          <ng-template pTemplate="footer">
+            <button *ngIf="restore.status === 'running'" 
+                    pButton type="button" label="Cancel" 
+                    icon="pi pi-times" 
+                    class="p-button-outlined p-button-danger">
+            </button>
+          </ng-template>
+        </p-card>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Filters Section -->
+  <div class="p-3 bg-gray-800 border-round mb-4">
+    <div class="flex align-items-center justify-content-between mb-3">
+      <h3 class="text-xl font-semibold m-0">Filter Snapshots</h3>
+      <button pButton type="button" label="Reset Filters" 
+              icon="pi pi-filter-slash" 
+              class="p-button-sm p-button-outlined"
+              (click)="resetFilters()">
+      </button>
+    </div>
+    
+    <div class="grid">
+      <!-- Repository Filter -->
+      <div class="col-12 md:col-4 mb-3">
+        <label for="repositoryFilter" class="block mb-2">Repository</label>
+        <p-dropdown id="repositoryFilter"
+                   [options]="repositories"
+                   [(ngModel)]="filterRepository"
+                   optionLabel="name"
+                   placeholder="Select Repository"
+                   styleClass="w-full"
+                   [showClear]="true"
+                   (onChange)="applyFilters()">
+        </p-dropdown>
+      </div>
+      
+      <!-- Plan Filter -->
+      <div class="col-12 md:col-4 mb-3">
+        <label for="planFilter" class="block mb-2">Plan</label>
+        <p-dropdown id="planFilter"
+                   [options]="plans"
+                   [(ngModel)]="filterPlan"
+                   optionLabel="name"
+                   placeholder="Select Plan"
+                   styleClass="w-full"
+                   [showClear]="true"
+                   (onChange)="applyFilters()">
+        </p-dropdown>
+      </div>
+      
+      <!-- Date Range Filter -->
+      <div class="col-12 md:col-4 mb-3">
+        <label for="dateFilter" class="block mb-2">Date Range</label>
+        <p-calendar id="dateFilter"
+                   [(ngModel)]="filterDateRange"
+                   selectionMode="range"
+                   [showIcon]="true"
+                   styleClass="w-full"
+                   placeholder="Select Date Range"
+                   (onSelect)="applyFilters()"
+                   (onClear)="applyFilters()">
+        </p-calendar>
+      </div>
+      
+      <!-- Tags Filter -->
+      <div class="col-12 mb-3">
+        <label class="block mb-2">Tags</label>
+        <div class="p-inputgroup">
+          <input type="text" pInputText [(ngModel)]="filterTagInput" placeholder="Add tag..." 
+                 (keydown.enter)="addFilterTag(); $event.preventDefault()">
+          <button type="button" pButton icon="pi pi-plus" class="p-button-primary" (click)="addFilterTag()"></button>
+        </div>
+        
+        <div class="flex flex-wrap gap-2 mt-2">
+          <p-chip *ngFor="let tag of filterTags" 
+                 [label]="tag" 
+                 [removable]="true"
+                 (onRemove)="removeFilterTag(tag)">
+          </p-chip>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Snapshots Table -->
+  <p-table [value]="filteredSnapshots" 
+          [loading]="loading"
+          styleClass="p-datatable-sm"
+          [rowHover]="true">
+    <ng-template pTemplate="header">
+      <tr>
+        <th>Snapshot ID</th>
+        <th>Date</th>
+        <th>Repository</th>
+        <th>Size</th>
+        <th>Files</th>
+        <th>Tags</th>
+        <th style="width: 10rem">Actions</th>
+      </tr>
+    </ng-template>
+    
+    <ng-template pTemplate="body" let-snapshot>
+      <tr>
+        <td>
+          <span class="font-monospace text-sm">{{ snapshot.snapshot_id || snapshot.id }}</span>
+        </td>
+        <td>
+          <span>{{ formatDate(snapshot.time) }}</span>
+        </td>
+        <td>
+          <span>{{ getRepositoryName(snapshot.repository) }}</span>
+        </td>
+        <td>
+          <span>{{ getSnapshotSize(snapshot) }}</span>
+        </td>
+        <td>
+          <span>{{ snapshot.file_count || (snapshot.summary && snapshot.summary.totalFileCount) || 'N/A' }}</span>
+        </td>
+        <td>
+          <div class="flex flex-wrap gap-1">
+            <p-chip *ngFor="let tag of snapshot.tags" 
+                   [label]="tag" 
+                   styleClass="mr-1 text-xs">
+            </p-chip>
+            <span *ngIf="!snapshot.tags || snapshot.tags.length === 0">No tags</span>
+          </div>
+        </td>
+        <td>
+          <button pButton type="button" 
+                  icon="pi pi-replay" 
+                  class="p-button-success p-button-sm mr-2"
+                  pTooltip="Restore from this snapshot"
+                  tooltipPosition="top"
+                  (click)="showRestoreDialog(snapshot)">
+          </button>
+          <button pButton type="button" 
+                  icon="pi pi-info-circle" 
+                  class="p-button-info p-button-sm"
+                  pTooltip="View Details"
+                  tooltipPosition="top">
+          </button>
+        </td>
+      </tr>
+    </ng-template>
+    
+    <ng-template pTemplate="emptymessage">
+      <tr>
+        <td colspan="7" class="text-center p-4">
+          <div class="flex flex-column align-items-center">
+            <i class="pi pi-folder-open text-4xl mb-3 text-500"></i>
+            <span class="text-xl font-semibold mb-2">No snapshots found</span>
+            <span class="text-500">Create a backup first or adjust your filters.</span>
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</main>
+
+<!-- Restore Dialog -->
+<p-dialog [(visible)]="restoreDialogVisible" 
+        [modal]="true"
+        [header]="'Restore from Snapshot'"
+        [style]="{width: '650px'}"
+        [closable]="!restoreInProgress"
+        [closeOnEscape]="!restoreInProgress">
+  
+  <div *ngIf="selectedSnapshot">
+    <div class="mb-4">
+      <h4 class="mb-2">Snapshot Information</h4>
+      <div class="grid">
+        <div class="col-12 md:col-6 mb-2">
+          <span class="block text-500 font-medium">Snapshot ID:</span>
+          <span class="font-monospace">{{ selectedSnapshot.snapshot_id || selectedSnapshot.id }}</span>
+        </div>
+        <div class="col-12 md:col-6 mb-2">
+          <span class="block text-500 font-medium">Date:</span>
+          <span>{{ formatDate(selectedSnapshot.time) }}</span>
+        </div>
+        <div class="col-12 md:col-6 mb-2">
+          <span class="block text-500 font-medium">Repository:</span>
+          <span>{{ getRepositoryName(selectedSnapshot.repository) }}</span>
+        </div>
+        <div class="col-12 md:col-6 mb-2">
+          <span class="block text-500 font-medium">Size:</span>
+          <span>{{ getSnapshotSize(selectedSnapshot) }}</span>
+        </div>
+      </div>
+    </div>
+    
+    <p-divider></p-divider>
+    
+    <!-- Restore Options -->
+    <h4 class="mb-2">Restore Options</h4>
+    <div class="grid p-fluid">
+      <!-- Target Path -->
+      <div class="col-12 mb-3">
+        <label for="targetPath" class="block font-medium mb-2">Target Path</label>
+        <input id="targetPath" type="text" pInputText [(ngModel)]="restoreOptions.targetPath" placeholder="/path/to/restore">
+        <small class="block text-500">Directory where files will be restored</small>
+      </div>
+      
+      <!-- Include Paths -->
+      <div class="col-12 mb-3">
+        <label class="block font-medium mb-2">Include Paths</label>
+        <div *ngFor="let path of restoreOptions.includePaths; let i = index" class="p-inputgroup mb-2">
+          <input type="text" pInputText [(ngModel)]="restoreOptions.includePaths[i]" placeholder="/path/to/include">
+          <button type="button" pButton icon="pi pi-trash" class="p-button-danger" (click)="removeIncludePath(i)"></button>
+        </div>
+        <button type="button" pButton icon="pi pi-plus" label="Add Path" 
+                class="p-button-outlined p-button-sm mb-2" 
+                (click)="addIncludePath()">
+        </button>
+        <small class="block text-500">Specify paths to restore. Leave the default '/' to restore everything.</small>
+      </div>
+      
+      <!-- Exclude Patterns -->
+      <div class="col-12 mb-3">
+        <label class="block font-medium mb-2">Exclude Patterns</label>
+        <div *ngFor="let pattern of restoreOptions.excludePatterns; let i = index" class="p-inputgroup mb-2">
+          <input type="text" pInputText [(ngModel)]="restoreOptions.excludePatterns[i]" placeholder="*.tmp">
+          <button type="button" pButton icon="pi pi-trash" class="p-button-danger" (click)="removeExcludePattern(i)"></button>
+        </div>
+        <button type="button" pButton icon="pi pi-plus" label="Add Exclude Pattern" 
+                class="p-button-outlined p-button-sm mb-2"
+                (click)="addExcludePattern()">
+        </button>
+        <small class="block text-500">Patterns to exclude from restore (e.g. *.tmp, *.log)</small>
+      </div>
+      
+      <!-- Advanced Options -->
+      <div class="col-12 mb-3">
+        <div class="flex align-items-center mb-2">
+          <p-checkbox [(ngModel)]="restoreOptions.overwriteExisting" [binary]="true" inputId="overwriteExisting"></p-checkbox>
+          <label for="overwriteExisting" class="ml-2">Overwrite existing files</label>
+        </div>
+        
+        <div class="flex align-items-center">
+          <p-checkbox [(ngModel)]="restoreOptions.verify" [binary]="true" inputId="verify"></p-checkbox>
+          <label for="verify" class="ml-2">Verify restored files</label>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Progress Section -->
+    <div *ngIf="restoreInProgress" class="mt-4">
+      <p class="text-center font-medium mb-2">Restore in progress... ({{ restoreProgress }}%)</p>
+      <p-progressBar [value]="restoreProgress"></p-progressBar>
+      <p class="text-center text-500 mt-2">This may take a while depending on the size of your backup.</p>
+    </div>
+  </div>
+  
+  <ng-template pTemplate="footer">
+    <button pButton type="button" label="Cancel" 
+            icon="pi pi-times" 
+            class="p-button-outlined"
+            [disabled]="restoreInProgress"
+            (click)="restoreDialogVisible = false">
+    </button>
+    <button pButton type="button" label="Start Restore" 
+            icon="pi pi-replay" 
+            class="p-button-success"
+            [disabled]="restoreInProgress"
+            [loading]="restoreInProgress"
+            (click)="initiateRestore()">
+    </button>
+  </ng-template>
+</p-dialog>

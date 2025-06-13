@@ -1,0 +1,80 @@
+:host ::ng-deep .p-button-text {
+  color: white;
+}
+
+:host ::ng-deep .p-tabview .p-tabview-nav {
+  background-color: #2d3035;
+}
+
+:host ::ng-deep .p-tabview .p-tabview-nav li .p-tabview-nav-link {
+  color: white;
+  background-color: #2d3035;
+}
+
+:host ::ng-deep .p-tabview .p-tabview-nav li.p-highlight .p-tabview-nav-link {
+  color: white;
+  background-color: #3f4550;
+  border-color: #3186ea;
+}
+
+:host ::ng-deep .p-tabview .p-tabview-panels {
+  background-color: #2d3035;
+  color: white;
+  padding: 1.5rem;
+}
+
+:host ::ng-deep .p-inputtext {
+  background-color: #23272f;
+  color: white;
+  border: 1px solid #374151;
+}
+
+:host ::ng-deep .p-inputtext:enabled:focus {
+  box-shadow: 0 0 0 1px #3186ea;
+  border-color: #3186ea;
+}
+
+:host ::ng-deep .p-inputtext.bg-gray-200 {
+  background-color: #1e1e1e !important;
+  color: #9ca3af !important;
+}
+
+:host ::ng-deep .p-divider .p-divider-content {
+  background-color: #2d3035;
+}
+
+:host ::ng-deep .p-checkbox .p-checkbox-box {
+  background-color: #23272f;
+  border-color: #374151;
+}
+
+:host ::ng-deep .p-checkbox .p-checkbox-box.p-highlight {
+  background-color: #3186ea;
+  border-color: #3186ea;
+}
+
+:host ::ng-deep .p-inputswitch.p-inputswitch-checked .p-inputswitch-slider {
+  background-color: #3186ea;
+}
+
+:host ::ng-deep .p-inputswitch .p-inputswitch-slider {
+  background-color: #374151;
+}
+
+:host ::ng-deep .p-password .p-password-panel {
+  background-color: #2d3035;
+  color: white;
+  border: 1px solid #374151;
+}
+
+.card {
+  background-color: #2d3035;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.bg-gray-200 {
+  background-color: rgba(0, 0, 0, 0.2);
+}

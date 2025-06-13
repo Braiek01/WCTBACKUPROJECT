@@ -1,0 +1,265 @@
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
+
+<p-toast></p-toast>
+<p-confirmDialog [style]="{width: '450px'}" header="Confirm Deletion" icon="pi pi-exclamation-triangle"></p-confirmDialog>
+
+<!-- Top Navigation Bar (Fixed) -->
+<div id="topbar" class="flex align-items-center justify-content-end px-5 py-3 border-bottom-1 surface-border"
+     style="background:#111317; position:fixed; top:0; left:0; right:0; height:64px; z-index:1001;">
+  <div class="flex align-items-center gap-4">
+    <p-splitButton 
+      [label]="username" 
+      icon="pi pi-user" 
+      class="p-button-text p-button-rounded p-button-plain text-white"
+      [model]="splitButtonItems"
+      [style]="{ width: 'auto' }"
+    ></p-splitButton>
+  </div>
+</div>
+
+<!-- Sidebar (Fixed) -->
+<aside id="sidebar" class="flex flex-column justify-content-between"
+       style="position:fixed; top:64px; left:0; width:260px; height:calc(100vh - 64px); background:#111317; z-index:1000;">
+  <div>
+    <div class="flex align-items-center px-4 py-4 border-bottom-1 surface-border">
+      <img src="/whitecapebcklogo.png" alt="Logo" height="65" />
+    </div>
+    
+    <!-- Navigation -->
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'dashboard']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-home mr-2"></i>
+          <span>Dashboard</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'users']" class="flex align-items-center px-4 py-3 text-white bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-users mr-2"></i>
+          <span>Users</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'backups']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-database mr-2"></i>
+          <span>Backups</span>
+        </a>
+      </li>
+      <!-- Plans Navigation Item -->
+      <li>
+        <a [routerLink]="['/', tenantName, 'plans']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-calendar mr-2"></i>
+          <span>Plans</span>
+        </a>
+      </li>
+      <!-- Repos Navigation Item -->
+      <li>
+        <a [routerLink]="['/', tenantName, 'repos']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-server mr-2"></i>
+          <span>Repos</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'restore']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-replay mr-2"></i>
+          <span>Restore</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0 mb-4">
+      <li>
+        <a [routerLink]="['/', tenantName, 'job-logs']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-history mr-2"></i>
+          <span>Job logs</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'analytics']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-chart-line mr-2"></i>
+          <span>Analytics</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</aside>
+
+<!-- Main Content (Fixed, No Scroll) -->
+<main style="
+    position: fixed;
+    top: 64px;
+    left: 260px;
+    width: calc(100vw - 260px);
+    height: calc(100vh - 64px);
+    background: #23272f;
+    padding: 2rem;
+    overflow: auto;
+">
+    <!-- Header -->
+    <div class="flex align-items-center justify-content-between mb-4">
+        <div class="flex align-items-center">
+            <i class="pi pi-users mr-2 text-2xl"></i>
+            <h2 class="text-2xl font-semibold mb-0 text-white">Users</h2>
+        </div>
+        <div class="flex gap-2">
+            <button pButton pRipple label="Add user..." icon="pi pi-user-plus" class="p-button-success" (click)="showAddUserDialog()"></button>
+  
+        </div>
+    </div>
+
+    <!-- Toolbar and Table Card -->
+    <div class="card">
+        <p-toolbar styleClass="mb-4">
+            <ng-template pTemplate="left">
+                <div class="flex align-items-center gap-2">
+                    <label for="rows" class="text-sm">Show</label>
+                    <p-dropdown inputId="rows" [options]="rowsPerPageOptions" [(ngModel)]="selectedRowsPerPage" optionLabel="label" optionValue="value" styleClass="p-inputtext-sm"></p-dropdown>
+                    <span class="text-sm">entries</span>
+                </div>
+            </ng-template>
+
+            <ng-template pTemplate="right">
+                <div class="flex align-items-center gap-2">
+                    <span class="p-input-icon-left">
+                        <i class="pi pi-search"></i>
+                        <input pInputText type="text" #filterInput (input)="applyFilter(dt, $event)" [(ngModel)]="filterValue" placeholder="Filter..." class="p-inputtext-sm" />
+                    </span>
+                </div>
+            </ng-template>
+        </p-toolbar>
+
+        <p-table #dt [value]="users" dataKey="id" [rows]="selectedRowsPerPage" 
+                [paginator]="users.length > selectedRowsPerPage" [rowsPerPageOptions]="[10, 25, 50, 100]" 
+                [globalFilterFields]="['username','email','role']" 
+                styleClass="p-datatable-sm p-datatable-striped" responsiveLayout="scroll">
+            <ng-template pTemplate="header">
+                <tr>
+                    <!-- Checkbox column removed -->
+                    <!-- Name column removed -->
+                    <th pSortableColumn="username">Username <p-sortIcon field="username"></p-sortIcon></th>
+                    <th pSortableColumn="email">Email <p-sortIcon field="email"></p-sortIcon></th>
+                    <th pSortableColumn="role_in_tenant">Tenant Role <p-sortIcon field="role_in_tenant"></p-sortIcon></th>
+                    <th pSortableColumn="is_active">Status <p-sortIcon field="is_active"></p-sortIcon></th>
+                    <th pSortableColumn="date_joined">Created <p-sortIcon field="date_joined"></p-sortIcon></th>
+                    <th style="width: 8rem">Actions</th>
+                </tr>
+            </ng-template>
+            <ng-template pTemplate="body" let-user>
+                <tr>
+                    <!-- Checkbox column removed -->
+                    <!-- Name column removed -->
+                    <td>{{user.username}}</td>
+                    <td>{{user.email}}</td>
+                    <td>
+                        <p-tag [value]="user.role_in_tenant" 
+                              [severity]="user.role_in_tenant === 'owner' ? 'danger' : (user.role_in_tenant === 'admin' ? 'warning' : 'info')">
+                        </p-tag>
+                    </td>
+                    <td>
+                        <p-tag [value]="user.is_active ? 'Active' : 'Inactive'" 
+                              [severity]="user.is_active ? 'success' : 'danger'">
+                        </p-tag>
+                    </td>
+                    <td>{{user.date_joined | date:'short'}}</td>
+                    <td>
+                        <button pButton pRipple icon="pi pi-pencil" class="p-button-rounded p-button-success p-button-text mr-2" 
+                          [routerLink]="['/', tenantName, 'users', user.username]" 
+                          pTooltip="Edit User" tooltipPosition="top"></button>
+                        <button pButton pRipple icon="pi pi-trash" class="p-button-rounded p-button-danger p-button-text" 
+                          (click)="confirmDeleteUser(user)" 
+                          pTooltip="Delete User" tooltipPosition="top"></button>
+                    </td>
+                </tr>
+            </ng-template>
+            <ng-template pTemplate="emptymessage">
+                <tr>
+                    <td [attr.colspan]="6">No users found.</td> <!-- Updated colspan from 8 to 6 -->
+                </tr>
+            </ng-template>
+            <ng-template pTemplate="summary">
+                Showing {{ (dt.first ?? 0) + 1 }} to {{ (dt.first ?? 0) + (dt.rows ?? 0) > users.length ? users.length : (dt.first ?? 0) + (dt.rows ?? 0) }} of {{ users.length }} entries
+            </ng-template>
+        </p-table>
+    </div>
+
+    <!-- Add User Dialog -->
+    <p-dialog header="Add user" [(visible)]="addUserDialogVisible" [modal]="true" [style]="{ width: '600px' }" [draggable]="false" [resizable]="false" (onHide)="hideAddUserDialog()">
+        <div class="p-fluid flex flex-column gap-4 mt-3">
+            <!-- Dialog content remains the same -->
+            <!-- Account Name -->
+            <div class="field grid align-items-center">
+                <label for="accountName" class="col-12 mb-2 md:col-3 md:mb-0 font-semibold">Full Name:</label>
+                <div class="col-12 md:col-9">
+                    <input pInputText id="accountName" [(ngModel)]="newUser.accountName" placeholder="John Doe" />
+                </div>
+            </div>
+            <!-- Username -->
+            <div class="field grid align-items-center">
+                <label for="username" class="col-12 mb-2 md:col-3 md:mb-0 font-semibold">Username:</label>
+                <div class="col-12 md:col-9">
+                    <input pInputText id="username" [(ngModel)]="newUser.username" placeholder="johndoe" required />
+                </div>
+            </div>
+            <!-- Password -->
+            <div class="field grid align-items-center">
+                <label for="password" class="col-12 mb-2 md:col-3 md:mb-0 font-semibold">Password:</label>
+                <div class="col-12 md:col-9">
+                    <div class="grid grid-nogutter">
+                        <div class="col-fixed pr-2">
+                            <button pButton pRipple label="Random" icon="pi pi-key" class="p-button-outlined p-button-secondary"></button>
+                        </div>
+                        <div class="col">
+                            <p-password inputId="password" [(ngModel)]="newUser.password" [toggleMask]="true" placeholder="Password" styleClass="w-full" inputStyleClass="w-full" [feedback]="false"></p-password>
+                        </div>
+                        <div class="col pl-2">
+                            <p-password inputId="confirmPassword" [(ngModel)]="newUser.confirmPassword" [toggleMask]="true" placeholder="Confirm password" styleClass="w-full" inputStyleClass="w-full" [feedback]="false"></p-password>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Email -->
+            <div class="field grid align-items-center">
+                <label for="email" class="col-12 mb-2 md:col-3 md:mb-0 font-semibold">Email:</label>
+                <div class="col-12 md:col-9">
+                    <input pInputText id="email" type="email" [(ngModel)]="newUser.email" placeholder="john.doe@example.com" />
+                </div>
+            </div>
+            <!-- User Role -->
+            <div class="field grid align-items-center">
+                <label for="role" class="col-12 mb-2 md:col-3 md:mb-0 font-semibold">Role:</label>
+                <div class="col-12 md:col-9">
+                    <p-dropdown id="role" [options]="roleOptions" [(ngModel)]="newUser.selectedRole" placeholder="Select Role" optionLabel="name" optionValue="code"></p-dropdown>
+                </div>
+            </div>
+            <!-- Apply Policy -->
+            <div class="field grid align-items-center">
+                <label for="policy" class="col-12 mb-2 md:col-3 md:mb-0 font-semibold">Apply Policy:</label>
+                <div class="col-12 md:col-9">
+                    <p-dropdown id="policy" [options]="policyOptions" [(ngModel)]="newUser.selectedPolicy" placeholder="(none)" optionLabel="name" optionValue="code"></p-dropdown>
+                </div>
+            </div>
+            <!-- Password Policy -->
+            <div class="field">
+                <label class="font-semibold block mb-3">Password Policy</label>
+                <div class="flex flex-column gap-2">
+                    <div class="flex align-items-center">
+                        <p-checkbox [(ngModel)]="newUser.allowAdminReset" [binary]="true" inputId="allowReset"></p-checkbox>
+                        <label for="allowReset" class="ml-2">Allow administrator to reset password</label>
+                    </div>
+                    <div class="flex align-items-center">
+                        <p-checkbox [(ngModel)]="newUser.requireChangeOnLogin" [binary]="true" inputId="requireChange"></p-checkbox>
+                        <label for="requireChange" class="ml-2">Require user to change password at next login</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <ng-template pTemplate="footer">
+            <button pButton pRipple label="Cancel" icon="pi pi-times" class="p-button-text" (click)="hideAddUserDialog()"></button>
+            <button pButton pRipple label="Add user" icon="pi pi-check" class="p-button-success" (click)="addUser()" [disabled]="!newUser.username || !newUser.password"></button>
+        </ng-template>
+    </p-dialog>
+</main>

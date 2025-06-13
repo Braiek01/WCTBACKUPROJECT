@@ -1,0 +1,260 @@
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
+
+<p-toast></p-toast>
+<p-confirmDialog [style]="{width: '450px'}" header="Confirm" icon="pi pi-exclamation-triangle"></p-confirmDialog>
+
+<!-- Top Navigation Bar (Fixed) -->
+<div id="topbar" class="flex align-items-center justify-content-end px-5 py-3 border-bottom-1 surface-border"
+     style="background:#111317; position:fixed; top:0; left:0; right:0; height:64px; z-index:1001;">
+  <div class="flex align-items-center gap-4">
+    <p-splitButton 
+      [label]="username" 
+      icon="pi pi-user" 
+      class="p-button-text p-button-rounded p-button-plain text-white"
+      [model]="splitButtonItems"
+      [style]="{ width: 'auto' }"
+    ></p-splitButton>
+  </div>
+</div>
+
+<!-- Sidebar (Fixed) -->
+<aside id="sidebar" class="flex flex-column justify-content-between"
+       style="position:fixed; top:64px; left:0; width:260px; height:calc(100vh - 64px); background:#111317; z-index:1000;">
+  <div>
+    <div class="flex align-items-center px-4 py-4 border-bottom-1 surface-border">
+      <img src="/whitecapebcklogo.png" alt="Logo" height="65" />
+    </div>
+    
+    <!-- Navigation -->
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'suboverview']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-home mr-2"></i>
+          <span>Home</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'subbackup']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-database mr-2"></i>
+          <span>Backup</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'subrestore']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-replay mr-2"></i>
+          <span>Restore</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0 mb-4">
+      <li>
+        <a [routerLink]="['/', tenantName, 'subjoblogs']" class="flex align-items-center px-4 py-3 text-white bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-history mr-2"></i>
+          <span>Job logs</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</aside>
+
+<!-- Main Content (Fixed, No Scroll) -->
+<main style="
+    position: fixed;
+    top: 64px;
+    left: 260px;
+    width: calc(100vw - 260px);
+    height: calc(100vh - 64px);
+    background: #23272f;
+    padding: 2rem;
+    overflow: auto;
+">
+  <!-- Header -->
+  <div class="flex align-items-center justify-content-between mb-4">
+    <div class="flex align-items-center">
+      <i class="pi pi-history mr-2 text-2xl"></i>
+      <h2 class="text-2xl font-semibold mb-0 text-white">Job Logs</h2>
+    </div>
+    <div class="flex gap-2">
+      <button pButton pRipple icon="pi pi-refresh" label="Refresh" class="p-button-outlined" (click)="loadJobLogs()"></button>
+    </div>
+  </div>
+
+  <!-- Filter and Controls Card -->
+  <div class="card mb-4">
+    <div class="grid">
+      <div class="col-12 md:col-4">
+        <label class="block mb-2 font-medium">Date Range</label>
+        <p-calendar [(ngModel)]="dateRange" 
+                   selectionMode="range" 
+                   [showButtonBar]="true" 
+                   placeholder="Select date range" 
+                   (onSelect)="onFilter()" 
+                   styleClass="w-full"></p-calendar>
+      </div>
+      <div class="col-12 md:col-3">
+        <label class="block mb-2 font-medium">Status</label>
+        <p-dropdown [options]="jobStatuses" 
+                   [(ngModel)]="selectedJobStatus" 
+                   placeholder="All Statuses" 
+                   (onChange)="onFilter()" 
+                   styleClass="w-full"></p-dropdown>
+      </div>
+      <div class="col-12 md:col-3">
+        <label class="block mb-2 font-medium">Job Type</label>
+        <p-dropdown [options]="jobTypes" 
+                   [(ngModel)]="selectedJobType" 
+                   placeholder="All Types" 
+                   (onChange)="onFilter()" 
+                   styleClass="w-full"></p-dropdown>
+      </div>
+      <div class="col-12 md:col-2 flex align-items-end">
+        <button pButton pRipple icon="pi pi-filter-slash" label="Reset" class="p-button-outlined w-full" 
+                (click)="resetFilters()"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Job Logs Table -->
+  <div class="card">
+    <p-table [value]="jobLogs" 
+             [paginator]="true" 
+             [rows]="rows" 
+             [showCurrentPageReport]="true" 
+             [rowsPerPageOptions]="[10, 25, 50]" 
+             [loading]="loading" 
+             styleClass="p-datatable-striped p-datatable-sm" 
+             [sortField]="'start_time'" 
+             [sortOrder]="-1"
+             currentPageReportTemplate="Showing {first} to {last} of {totalRecords} logs">
+      
+      <ng-template pTemplate="caption">
+        <div class="flex justify-content-between flex-wrap">
+          <div></div>
+          <span class="p-input-icon-left ml-auto">
+            <i class="pi pi-search"></i>
+            <input pInputText type="text" [(ngModel)]="searchText" (input)="onFilter()" placeholder="Search logs..." />
+          </span>
+        </div>
+      </ng-template>
+      
+      <ng-template pTemplate="header">
+        <tr>
+          <th pSortableColumn="id" style="width: 5%">ID <p-sortIcon field="id"></p-sortIcon></th>
+          <th pSortableColumn="type" style="width: 10%">Type <p-sortIcon field="type"></p-sortIcon></th>
+          <th pSortableColumn="server" style="width: 15%">Server <p-sortIcon field="server"></p-sortIcon></th>
+          <th pSortableColumn="start_time" style="width: 15%">Start Time <p-sortIcon field="start_time"></p-sortIcon></th>
+          <th style="width: 10%">Duration</th>
+          <th pSortableColumn="status" style="width: 10%">Status <p-sortIcon field="status"></p-sortIcon></th>
+          <th style="width: 10%">Size</th>
+          <th style="width: 10%">Actions</th>
+        </tr>
+      </ng-template>
+      
+      <ng-template pTemplate="body" let-job>
+        <tr>
+          <td>{{ job.id }}</td>
+          <td>
+            <div class="flex align-items-center">
+              <i [class]="getJobTypeIcon(job.type) + ' mr-2'"></i>
+              <span>{{ job.type | titlecase }}</span>
+            </div>
+          </td>
+          <td>{{ job.server }}</td>
+          <td>{{ formatDate(job.start_time) }}</td>
+          <td>{{ formatDuration(job.duration) }}</td>
+          <td>
+            <p-tag [severity]="getStatusSeverity(job.status)" [value]="job.status | titlecase"></p-tag>
+          </td>
+          <td>{{ job.size ? formatBytes(job.size) : 'N/A' }}</td>
+          <td>
+            <button pButton pRipple icon="pi pi-eye" class="p-button-rounded p-button-text" 
+                    pTooltip="View Details" tooltipPosition="top" (click)="viewJobDetails(job)"></button>
+          </td>
+        </tr>
+      </ng-template>
+      
+      <ng-template pTemplate="emptymessage">
+        <tr>
+          <td colspan="8" class="text-center p-5">
+            <div class="flex flex-column align-items-center">
+              <i class="pi pi-info-circle text-5xl text-700 mb-3"></i>
+              <span>No job logs found</span>
+              <small class="text-500">Try adjusting your filters or refreshing</small>
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </div>
+
+  <!-- Job Details Dialog -->
+  <p-dialog [(visible)]="showJobDetailsDialog" 
+            [modal]="true" 
+            [draggable]="false" 
+            [resizable]="false" 
+            header="Job Log Details" 
+            [style]="{width: '700px'}" 
+            [closeOnEscape]="true">
+    
+    <div class="p-fluid" *ngIf="selectedJob">
+      <div class="flex justify-content-between align-items-center mb-3">
+        <h3 class="m-0">{{ selectedJob.type | titlecase }} Operation</h3>
+        <p-tag [severity]="getStatusSeverity(selectedJob.status)" [value]="selectedJob.status | titlecase"></p-tag>
+      </div>
+      
+      <p-divider></p-divider>
+      
+      <div class="grid">
+        <div class="col-12 md:col-6">
+          <label class="font-bold block mb-2">Job ID</label>
+          <div class="text-800">{{ selectedJob.id }}</div>
+        </div>
+        <div class="col-12 md:col-6">
+          <label class="font-bold block mb-2">Status</label>
+          <div class="text-800">{{ selectedJob.status | titlecase }}</div>
+        </div>
+        <div class="col-12 md:col-6">
+          <label class="font-bold block mb-2">Server</label>
+          <div class="text-800">{{ selectedJob.server }}</div>
+        </div>
+        <div class="col-12 md:col-6">
+          <label class="font-bold block mb-2">Type</label>
+          <div class="text-800">{{ selectedJob.type | titlecase }}</div>
+        </div>
+        <div class="col-12 md:col-6">
+          <label class="font-bold block mb-2">Start Time</label>
+          <div class="text-800">{{ formatDate(selectedJob.start_time) }}</div>
+        </div>
+        <div class="col-12 md:col-6">
+          <label class="font-bold block mb-2">End Time</label>
+          <div class="text-800">{{ selectedJob.end_time ? formatDate(selectedJob.end_time) : 'N/A' }}</div>
+        </div>
+        <div class="col-12 md:col-6">
+          <label class="font-bold block mb-2">Duration</label>
+          <div class="text-800">{{ formatDuration(selectedJob.duration) }}</div>
+        </div>
+        <div class="col-12 md:col-6">
+          <label class="font-bold block mb-2">Size</label>
+          <div class="text-800">{{ selectedJob.size ? formatBytes(selectedJob.size) : 'N/A' }}</div>
+        </div>
+      </div>
+      
+      <!-- Log information -->
+      <div class="mt-3" *ngIf="selectedJob.log">
+        <h4 class="mb-2">Log Output</h4>
+        <div class="p-3 border-round bg-gray-900 text-white font-mono text-sm overflow-auto" style="max-height: 300px;">
+          <pre>{{ selectedJob.log }}</pre>
+        </div>
+      </div>
+    </div>
+    
+    <ng-template pTemplate="footer">
+      <button pButton pRipple label="Close" icon="pi pi-times" class="p-button-outlined" (click)="showJobDetailsDialog = false"></button>
+    </ng-template>
+  </p-dialog>
+</main>

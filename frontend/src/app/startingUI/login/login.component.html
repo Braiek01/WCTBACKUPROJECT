@@ -1,0 +1,63 @@
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">  
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
+<app-navbar></app-navbar>
+<p-toast></p-toast>
+
+<!-- Main container - Removed align-items-center to move card up -->
+<div class="login-container min-h-screen w-screen flex justify-content-center min-h-screen text-800 py-4"> <!-- Added bg-gray-900 for dark background -->
+
+    <!-- Responsive Card Width: Full width on small screens, max-width on medium and up -->
+    <p-card styleClass="w-full md:w-30rem login-card surface-card">
+        <ng-template pTemplate="header">
+            <!-- Updated Header -->
+            <div class="text-center text-3xl font-bold pt-4 mb-4">Welcome Back!</div>
+            <div class="text-center text-xl text-600 mb-4">Sign in to continue</div>
+        </ng-template>
+
+        <!-- Username Field -->
+        <div class="field mb-4 px-4">
+            <label for="username" class="block text-900 font-medium mb-2">Username or Email</label>
+            <p-inputGroup>
+                <p-inputGroupAddon>
+                    <i class="pi pi-user"></i>
+                </p-inputGroupAddon>
+                <input id="username" type="text" pInputText placeholder="Enter your username or email" class="w-full" [(ngModel)]="username" />
+            </p-inputGroup>
+        </div>
+
+        <!-- Password Field -->
+        <div class="field mb-4 px-4">
+            <label for="password" class="block text-900 font-medium mb-2">Password</label>
+            <p-password inputId="password" [(ngModel)]="password" [toggleMask]="true" styleClass="w-full" inputStyleClass="w-full" placeholder="Enter your password" [feedback]="false"></p-password> <!-- Feedback usually not needed for login -->
+        </div>
+
+        <!-- Forgot Password Link -->
+        <div class="field mb-4 px-4 text-right">
+             <a href="#" class="text-primary hover:text-primary-dark text-sm">Forgot Password?</a>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="px-4">
+             <!-- Updated Login Button -->
+             <button pButton pRipple label="Sign In" icon="pi pi-sign-in" class="w-full p-button-primary mb-3" (click)="login()"></button> <!-- Assuming you have a login() method -->
+
+             <p-divider align="center" styleClass="my-3">
+                <span class="text-600 font-normal text-sm">OR</span>
+             </p-divider>
+
+             <!-- Sign in with Google Button -->
+             
+
+             <!-- Link to Sign Up -->
+             <div class="text-center text-sm">
+                <span class="text-600">Don't have an account? </span>
+                <a routerLink="/signup" class="text-primary hover:text-primary-dark font-medium">Sign Up</a>
+             </div>
+        </div>
+
+    </p-card>
+
+</div>
+
+
+<app-footer></app-footer>

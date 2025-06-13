@@ -1,0 +1,319 @@
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
+
+<p-toast></p-toast>
+
+<!-- Top Navigation Bar (Fixed) -->
+<div id="topbar" class="flex align-items-center justify-content-end px-5 py-3 border-bottom-1 surface-border"
+     style="background:#111317; position:fixed; top:0; left:0; right:0; height:64px; z-index:1001;">
+  <div class="flex align-items-center gap-4">
+    <p-splitButton 
+      [label]="username" 
+      icon="pi pi-user" 
+      class="p-button-text p-button-rounded p-button-plain text-white"
+      [model]="splitButtonItems"
+      [style]="{ width: 'auto' }"
+    ></p-splitButton>
+  </div>
+</div>
+
+<!-- Sidebar (Fixed) -->
+<aside id="sidebar" class="flex flex-column justify-content-between"
+       style="position:fixed; top:64px; left:0; width:260px; height:calc(100vh - 64px); background:#111317; z-index:1000;">
+  <div>
+    <div class="flex align-items-center px-4 py-4 border-bottom-1 surface-border">
+      <img src="/whitecapebcklogo.png" alt="Logo" height="65" />
+    </div>
+    
+    <!-- Navigation -->
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'dashboard']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-home mr-2"></i>
+          <span>Dashboard</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'users']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-users mr-2"></i>
+          <span>Users</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'backups']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-database mr-2"></i>
+          <span>Backups</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'plans']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-calendar mr-2"></i>
+          <span>Plans</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'repos']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-server mr-2"></i>
+          <span>Repos</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'restore']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-replay mr-2"></i>
+          <span>Restore</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0 mb-4">
+      <li>
+        <a [routerLink]="['/', tenantName, 'job-logs']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-history mr-2"></i>
+          <span>Job logs</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'analytics']" class="flex align-items-center px-4 py-3 text-white bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-chart-line mr-2"></i>
+          <span>Analytics</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</aside>
+
+<!-- Main Content (Fixed, No Scroll) -->
+<main style="
+    position: fixed;
+    top: 64px;
+    left: 260px;
+    width: calc(100vw - 260px);
+    height: calc(100vh - 64px);
+    background: #23272f;
+    padding: 2rem;
+    overflow: auto;
+">
+  <!-- Header -->
+  <div class="flex align-items-center justify-content-between mb-4">
+    <div class="flex align-items-center">
+      <i class="pi pi-chart-line mr-2 text-2xl"></i>
+      <h2 class="text-2xl font-semibold mb-0 text-white">Backup Analytics</h2>
+    </div>
+    
+    <div class="flex align-items-center">
+      <p-dropdown [options]="dateOptions" [(ngModel)]="selectedDateOption" 
+                  (onChange)="setDateRange($event.value)" styleClass="mr-2"></p-dropdown>
+      
+      <p-calendar [(ngModel)]="dateRange" selectionMode="range" [showButtonBar]="true" 
+                 [readonlyInput]="true" styleClass="mr-2" placeholder="Custom date range"
+                 (onSelect)="onDateRangeChange()" [disabled]="selectedDateOption !== 'custom'"></p-calendar>
+      
+      <button pButton pRipple label="Refresh" icon="pi pi-refresh" 
+              class="p-button-outlined" (click)="loadAnalyticsData()"></button>
+    </div>
+  </div>
+  
+  <!-- Summary Metrics Card -->
+  <div class="card mb-4">
+    <div class="grid">
+      <div class="col-12 md:col-4 lg:col-2">
+        <div class="text-center p-3">
+          <div class="text-lg font-bold mb-2">Total Backups</div>
+          <div class="text-3xl">{{ summaryStats.totalBackups }}</div>
+        </div>
+      </div>
+      <div class="col-12 md:col-4 lg:col-2">
+        <div class="text-center p-3">
+          <div class="text-lg font-bold mb-2">Success Rate</div>
+          <div class="text-3xl">{{ summaryStats.successRate | number:'1.1-1' }}%</div>
+        </div>
+      </div>
+      <div class="col-12 md:col-4 lg:col-2">
+        <div class="text-center p-3">
+          <div class="text-lg font-bold mb-2">Storage Used</div>
+          <div class="text-3xl">{{ formatBytes(summaryStats.totalStorageUsed) }}</div>
+        </div>
+      </div>
+      <div class="col-12 md:col-4 lg:col-2">
+        <div class="text-center p-3">
+          <div class="text-lg font-bold mb-2">Avg Backup Size</div>
+          <div class="text-3xl">{{ formatBytes(summaryStats.avgBackupSize) }}</div>
+        </div>
+      </div>
+      <div class="col-12 md:col-4 lg:col-2">
+        <div class="text-center p-3">
+          <div class="text-lg font-bold mb-2">Deduplication</div>
+          <div class="text-3xl">{{ summaryStats.dataDeduplicationRatio | number:'1.1-1' }}x</div>
+        </div>
+      </div>
+      <div class="col-12 md:col-4 lg:col-2">
+        <div class="text-center p-3">
+          <div class="text-lg font-bold mb-2">Avg Duration</div>
+          <div class="text-3xl">{{ formatDuration(summaryStats.avgBackupDuration) }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Charts Tab View -->
+  <p-tabView styleClass="mb-4">
+    <!-- Backup Success Tab -->
+    <p-tabPanel header="Backup Success">
+      <div class="card" *ngIf="!loadingBackupStats">
+        <h3>Backup Success/Failure Over Time</h3>
+        <p-chart type="line" [data]="backupSuccessChart" [options]="backupSuccessOptions" height="350px"></p-chart>
+      </div>
+      <div class="card" *ngIf="loadingBackupStats">
+        <div class="grid">
+          <div class="col-12">
+            <p-skeleton height="350px" styleClass="w-full"></p-skeleton>
+          </div>
+        </div>
+      </div>
+    </p-tabPanel>
+    
+    <!-- Storage Usage Tab -->
+    <p-tabPanel header="Storage Analytics">
+      <div class="grid" *ngIf="!loadingStorageStats">
+        <div class="col-12 md:col-6">
+          <div class="card">
+            <h3>Storage Utilization</h3>
+            <p-chart type="doughnut" [data]="storageUsageChart" [options]="storageUsageOptions" height="300px"></p-chart>
+          </div>
+        </div>
+        <div class="col-12 md:col-6">
+          <div class="card">
+            <h3>Data Growth Over Time</h3>
+            <p-chart type="line" [data]="dataGrowthChart" [options]="dataGrowthOptions" height="300px"></p-chart>
+          </div>
+        </div>
+      </div>
+      <div class="grid" *ngIf="loadingStorageStats">
+        <div class="col-12 md:col-6">
+          <div class="card">
+            <p-skeleton height="350px" styleClass="w-full"></p-skeleton>
+          </div>
+        </div>
+        <div class="col-12 md:col-6">
+          <div class="card">
+            <p-skeleton height="350px" styleClass="w-full"></p-skeleton>
+          </div>
+        </div>
+      </div>
+    </p-tabPanel>
+    
+    <!-- Performance Tab -->
+    <p-tabPanel header="Performance">
+      <div class="grid" *ngIf="!loadingPerformanceStats">
+        <div class="col-12 md:col-6">
+          <div class="card">
+            <h3>Backup Duration by Type</h3>
+            <p-chart type="bar" [data]="backupDurationChart" [options]="backupDurationOptions" height="300px"></p-chart>
+          </div>
+        </div>
+        <div class="col-12 md:col-6">
+          <div class="card">
+            <h3>Performance Metrics</h3>
+            <div class="p-3">
+              <div class="mb-4">
+                <label class="block font-medium mb-2">Average Transfer Rate</label>
+                <div class="flex align-items-center">
+                  <p-progressBar [value]="(performanceMetrics.avgTransferRate / performanceMetrics.maxTransferRate) * 100" 
+                                styleClass="w-full mr-3"></p-progressBar>
+                  <span class="font-bold">{{ performanceMetrics.avgTransferRate | number:'1.1-1' }} MB/s</span>
+                </div>
+              </div>
+              <div class="mb-4">
+                <label class="block font-medium mb-2">Max Transfer Rate</label>
+                <div class="flex align-items-center">
+                  <p-progressBar [value]="100" styleClass="w-full mr-3"></p-progressBar>
+                  <span class="font-bold">{{ performanceMetrics.maxTransferRate | number:'1.1-1' }} MB/s</span>
+                </div>
+              </div>
+              <div class="mb-4">
+                <label class="block font-medium mb-2">Average CPU Usage</label>
+                <div class="flex align-items-center">
+                  <p-progressBar [value]="performanceMetrics.avgCpuUsage" styleClass="w-full mr-3"></p-progressBar>
+                  <span class="font-bold">{{ performanceMetrics.avgCpuUsage | number:'1.1-1' }}%</span>
+                </div>
+              </div>
+              <div class="mb-3">
+                <label class="block font-medium mb-2">Average Memory Usage</label>
+                <div class="flex align-items-center">
+                  <p-progressBar [value]="(performanceMetrics.avgMemoryUsage / 8) * 100" styleClass="w-full mr-3"></p-progressBar>
+                  <span class="font-bold">{{ performanceMetrics.avgMemoryUsage | number:'1.1-1' }} GB</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="grid" *ngIf="loadingPerformanceStats">
+        <div class="col-12 md:col-6">
+          <div class="card">
+            <p-skeleton height="350px" styleClass="w-full"></p-skeleton>
+          </div>
+        </div>
+        <div class="col-12 md:col-6">
+          <div class="card">
+            <p-skeleton height="350px" styleClass="w-full"></p-skeleton>
+          </div>
+        </div>
+      </div>
+    </p-tabPanel>
+  </p-tabView>
+  
+  <!-- Repository Health -->
+  <div class="card">
+    <div class="flex align-items-center justify-content-between mb-3">
+      <h3 class="m-0">Repository Health</h3>
+      <span class="p-input-icon-left">
+        <i class="pi pi-search"></i>
+        <input type="text" pInputText placeholder="Search repositories..." />
+      </span>
+    </div>
+    
+    <p-table [value]="repositories" [loading]="loadingRepositoryHealth" 
+            styleClass="p-datatable-sm" [paginator]="true" [rows]="5">
+      <ng-template pTemplate="header">
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Health</th>
+          <th>Last Check</th>
+          <th>Storage Used</th>
+          <th>Backups</th>
+          <th>Integrity</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-repo>
+        <tr>
+          <td>{{ repo.name }}</td>
+          <td>{{ repo.uri?.split(':')[0] || 'Unknown' }}</td>
+          <td>
+            <p-tag [value]="repo.health | titlecase" [severity]="getHealthSeverity(repo.health)"></p-tag>
+          </td>
+          <td>{{ formatDate(repo.lastCheck) }}</td>
+          <td>{{ formatBytes(repo.storageUsed * 1024 * 1024) }}</td>
+          <td>{{ repo.backupCount }}</td>
+          <td>
+            <p-tag [value]="repo.integrity | titlecase" [severity]="getIntegritySeverity(repo.integrity)"></p-tag>
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr>
+          <td colspan="7" class="text-center p-4">
+            <div class="flex flex-column align-items-center">
+              <i class="pi pi-info-circle text-5xl text-700 mb-3"></i>
+              <span>No repositories found</span>
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </div>
+</main>

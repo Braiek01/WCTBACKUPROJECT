@@ -1,0 +1,191 @@
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
+
+<p-toast></p-toast>
+<p-confirmDialog [style]="{width: '450px'}" header="Confirm" icon="pi pi-exclamation-triangle"></p-confirmDialog>
+
+<!-- Top Navigation Bar -->
+<div class="top-bar">
+  <div class="logo-container">
+    <img src="/whitecapebcklogo.png" alt="WhiteCape Backup" height="40">
+  </div>
+  <p-splitButton 
+    [label]="username" 
+    icon="pi pi-user" 
+    styleClass="p-button-text p-button-rounded p-button-plain" 
+    [model]="splitButtonItems">
+  </p-splitButton>
+</div>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <ul class="nav-list">
+    <li>
+      <a [routerLink]="['/', tenantName, 'suboverview']" class="nav-link">
+        <i class="pi pi-home"></i>
+        <span>Home</span>
+      </a>
+    </li>
+    <li>
+      <a [routerLink]="['/', tenantName, 'subbackup']" class="nav-link">
+        <i class="pi pi-database"></i>
+        <span>Backup</span>
+      </a>
+    </li>
+    <li>
+      <a [routerLink]="['/', tenantName, 'subrestore']" class="nav-link">
+        <i class="pi pi-replay"></i>
+        <span>Restore</span>
+      </a>
+    </li>
+    <li>
+      <a [routerLink]="['/', tenantName, 'subjoblogs']" class="nav-link">
+        <i class="pi pi-history"></i>
+        <span>Job Logs</span>
+      </a>
+    </li>
+  </ul>
+</div>
+
+<!-- Main Content -->
+<div class="main-content">
+  <div class="header">
+    <div class="header-title">
+      <i class="pi pi-user text-2xl"></i>
+      <h1>My Profile</h1>
+    </div>
+    <button pButton label="Save Changes" icon="pi pi-save" [disabled]="!formChanged" (click)="saveProfile()"></button>
+  </div>
+
+  <div class="content-body">
+    <p-tabView>
+      <!-- Personal Info Tab -->
+      <p-tabPanel header="Personal Info">
+        <div class="grid">
+          <div class="col-12 md:col-6">
+            <div class="field">
+              <label for="firstName">First Name</label>
+              <input id="firstName" type="text" pInputText [(ngModel)]="user.first_name" (ngModelChange)="onFormChange()">
+            </div>
+          </div>
+          
+          <div class="col-12 md:col-6">
+            <div class="field">
+              <label for="lastName">Last Name</label>
+              <input id="lastName" type="text" pInputText [(ngModel)]="user.last_name" (ngModelChange)="onFormChange()">
+            </div>
+          </div>
+          
+          <div class="col-12 md:col-6">
+            <div class="field">
+              <label for="email">Email</label>
+              <input id="email" type="email" pInputText [(ngModel)]="user.email" (ngModelChange)="onFormChange()">
+            </div>
+          </div>
+          
+          <div class="col-12 md:col-6">
+            <div class="field">
+              <label for="phone">Phone (optional)</label>
+              <input id="phone" type="tel" pInputText [(ngModel)]="user.phone" (ngModelChange)="onFormChange()">
+            </div>
+          </div>
+          
+          <div class="col-12">
+            <div class="field">
+              <label for="company">Company (optional)</label>
+              <input id="company" type="text" pInputText [(ngModel)]="user.company" (ngModelChange)="onFormChange()">
+            </div>
+          </div>
+        </div>
+        
+        <p-divider></p-divider>
+        
+        <!-- Account Info -->
+        <div class="grid">
+          <div class="col-12 md:col-6">
+            <div class="field">
+              <label>Username</label>
+              <input type="text" pInputText [value]="user.username" disabled class="readonly-field">
+            </div>
+          </div>
+          
+          <div class="col-12 md:col-6">
+            <div class="field">
+              <label>Role</label>
+              <input type="text" pInputText [value]="user.role_in_tenant | titlecase" disabled class="readonly-field">
+            </div>
+          </div>
+          
+          <div class="col-12 md:col-6">
+            <div class="field">
+              <label>Last Login</label>
+              <input type="text" pInputText [value]="formatDate(user.last_login)" disabled class="readonly-field">
+            </div>
+          </div>
+          
+          <div class="col-12 md:col-6">
+            <div class="field">
+              <label>Account Created</label>
+              <input type="text" pInputText [value]="formatDate(user.date_joined)" disabled class="readonly-field">
+            </div>
+          </div>
+        </div>
+      </p-tabPanel>
+      
+      <!-- Password Tab -->
+      <p-tabPanel header="Password">
+        <div class="p-fluid">
+          <div class="field">
+            <label for="currentPassword">Current Password</label>
+            <p-password id="currentPassword" [(ngModel)]="passwordData.currentPassword" [toggleMask]="true" [feedback]="false" styleClass="w-full" (ngModelChange)="onPasswordFormChange()"></p-password>
+          </div>
+          
+          <div class="field">
+            <label for="newPassword">New Password</label>
+            <p-password id="newPassword" [(ngModel)]="passwordData.newPassword" [toggleMask]="true" [feedback]="true" styleClass="w-full" (ngModelChange)="onPasswordFormChange()"></p-password>
+          </div>
+          
+          <div class="field">
+            <label for="confirmPassword">Confirm New Password</label>
+            <p-password id="confirmPassword" [(ngModel)]="passwordData.confirmPassword" [toggleMask]="true" [feedback]="false" styleClass="w-full" (ngModelChange)="onPasswordFormChange()"></p-password>
+          </div>
+          
+          <button pButton label="Change Password" icon="pi pi-key" 
+                  [disabled]="!passwordFormChanged || !passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword" 
+                  (click)="changePassword()"></button>
+        </div>
+      </p-tabPanel>
+      
+      <!-- Preferences Tab -->
+      <p-tabPanel header="Preferences">
+        <div class="p-fluid">
+          <div class="field-checkbox mb-3">
+            <p-inputSwitch [(ngModel)]="uiPreferences.darkMode" inputId="darkMode"></p-inputSwitch>
+            <label for="darkMode" class="ml-2">Dark Mode</label>
+          </div>
+          
+          <div class="field-checkbox mb-3">
+            <p-inputSwitch [(ngModel)]="uiPreferences.compactView" inputId="compactView"></p-inputSwitch>
+            <label for="compactView" class="ml-2">Compact View</label>
+          </div>
+          
+          <p-divider></p-divider>
+          
+          <h3>Notifications</h3>
+          
+          <div class="field-checkbox mb-3">
+            <p-inputSwitch [(ngModel)]="uiPreferences.enableNotifications" inputId="enableNotifications"></p-inputSwitch>
+            <label for="enableNotifications" class="ml-2">Enable In-App Notifications</label>
+          </div>
+          
+          <div class="field-checkbox mb-3">
+            <p-inputSwitch [(ngModel)]="uiPreferences.emailAlerts" inputId="emailAlerts"></p-inputSwitch>
+            <label for="emailAlerts" class="ml-2">Send Email Alerts</label>
+          </div>
+          
+          <button pButton label="Save Preferences" icon="pi pi-save" (click)="savePreferences()"></button>
+        </div>
+      </p-tabPanel>
+    </p-tabView>
+  </div>
+</div>

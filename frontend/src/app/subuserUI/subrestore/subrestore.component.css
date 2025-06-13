@@ -1,0 +1,89 @@
+:host ::ng-deep .p-datatable .p-datatable-thead > tr > th {
+  background-color: #1e1e1e;
+  color: white;
+}
+
+:host ::ng-deep .p-datatable .p-datatable-tbody > tr {
+  background-color: #2d3035;
+  color: white;
+}
+
+:host ::ng-deep .p-datatable .p-datatable-tbody > tr:nth-child(even) {
+  background-color: #262a30;
+}
+
+:host ::ng-deep .p-card {
+  background-color: #2d3035;
+  color: white;
+}
+
+:host ::ng-deep .p-card .p-card-header {
+  background-color: #1e1e1e;
+  color: white;
+}
+
+:host ::ng-deep .p-card .p-card-footer {
+  background-color: #1e1e1e;
+  color: white;
+}
+
+:host ::ng-deep .p-dropdown-panel {
+  background-color: #2d3035;
+  color: white;
+}
+
+:host ::ng-deep .p-dropdown-panel .p-dropdown-items .p-dropdown-item {
+  color: white;
+}
+
+:host ::ng-deep .p-dropdown-panel .p-dropdown-items .p-dropdown-item:hover {
+  background-color: #3f4550;
+}
+
+:host ::ng-deep .p-dialog .p-dialog-header {
+  background-color: #1e1e1e;
+  color: white;
+}
+
+:host ::ng-deep .p-dialog .p-dialog-content {
+  background-color: #2d3035;
+  color: white;
+}
+
+:host ::ng-deep .p-dialog .p-dialog-footer {
+  background-color: #1e1e1e;
+  color: white;
+}
+
+:host ::ng-deep .p-inputtext {
+  background-color: #2d3035;
+  color: white;
+  border-color: #4f5b69;
+}
+
+:host ::ng-deep .p-calendar .p-datepicker {
+  background-color: #2d3035;
+  color: white;
+}
+
+:host ::ng-deep .p-calendar .p-datepicker table td > span {
+  color: white;
+}
+
+:host ::ng-deep .p-calendar .p-datepicker .p-datepicker-header {
+  background-color: #1e1e1e;
+  color: white;
+}
+
+:host ::ng-deep .p-progressbar {
+  background-color: #3f4550;
+}
+
+:host ::ng-deep .p-progressbar .p-progressbar-value {
+  background-color: #2196F3;
+}
+
+:host ::ng-deep .p-chip {
+  background-color: #3f4550;
+  color: white;
+}

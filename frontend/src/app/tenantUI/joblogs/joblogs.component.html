@@ -1,0 +1,261 @@
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
+
+<p-toast></p-toast>
+<p-confirmDialog [style]="{width: '450px'}" header="Confirm" icon="pi pi-exclamation-triangle"></p-confirmDialog>
+
+<!-- Top Navigation Bar (Fixed) -->
+<div id="topbar" class="flex align-items-center justify-content-end px-5 py-3 border-bottom-1 surface-border"
+     style="background:#111317; position:fixed; top:0; left:0; right:0; height:64px; z-index:1001;">
+  <div class="flex align-items-center gap-4">
+    <p-splitButton 
+      [label]="username" 
+      icon="pi pi-user" 
+      class="p-button-text p-button-rounded p-button-plain text-white"
+      [model]="splitButtonItems"
+      [style]="{ width: 'auto' }"
+    ></p-splitButton>
+  </div>
+</div>
+
+<!-- Sidebar (Fixed) -->
+<aside id="sidebar" class="flex flex-column justify-content-between"
+       style="position:fixed; top:64px; left:0; width:260px; height:calc(100vh - 64px); background:#111317; z-index:1000;">
+  <div>
+    <div class="flex align-items-center px-4 py-4 border-bottom-1 surface-border">
+      <img src="/whitecapebcklogo.png" alt="Logo" height="65" />
+    </div>
+    
+    <!-- Navigation -->
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'dashboard']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-home mr-2"></i>
+          <span>Dashboard</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'users']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-users mr-2"></i>
+          <span>Users</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'backups']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-database mr-2"></i>
+          <span>Backups</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'plans']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-calendar mr-2"></i>
+          <span>Plans</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'repos']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-server mr-2"></i>
+          <span>Repos</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'restore']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-replay mr-2"></i>
+          <span>Restore</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0 mb-4">
+      <li>
+        <a [routerLink]="['/', tenantName, 'job-logs']" class="flex align-items-center px-4 py-3 text-white bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-history mr-2"></i>
+          <span>Job logs</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'analytics']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-chart-line mr-2"></i>
+          <span>Analytics</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</aside>
+
+<!-- Main Content (Fixed, No Scroll) -->
+<main style="
+    position: fixed;
+    top: 64px;
+    left: 260px;
+    width: calc(100vw - 260px);
+    height: calc(100vh - 64px);
+    background: #23272f;
+    padding: 2rem;
+    overflow: auto;
+">
+  <!-- Header -->
+  <div class="flex align-items-center justify-content-between mb-4">
+    <div class="flex align-items-center">
+      <i class="pi pi-history mr-2 text-2xl"></i>
+      <h2 class="text-2xl font-semibold mb-0 text-white">Job Logs</h2>
+    </div>
+    <div class="flex gap-2">
+      <button pButton pRipple icon="pi pi-refresh" label="Refresh" class="p-button-outlined" (click)="loadJobLogs()"></button>
+    </div>
+  </div>
+
+  <!-- Filter and Controls Card -->
+  <div class="card mb-4">
+    <div class="grid">
+      <div class="col-12 md:col-4">
+        <label class="block mb-2 font-medium">Date Range</label>
+        <p-calendar [(ngModel)]="filterDateRange" selectionMode="range" [showButtonBar]="true" 
+                   placeholder="Select date range" (onSelect)="applyFilters()" styleClass="w-full"></p-calendar>
+      </div>
+      <div class="col-12 md:col-3">
+        <label class="block mb-2 font-medium">Status</label>
+        <p-dropdown [options]="statusOptions" [(ngModel)]="filterStatus" placeholder="All Statuses" 
+                   (onChange)="applyFilters()" styleClass="w-full"></p-dropdown>
+      </div>
+      <div class="col-12 md:col-3">
+        <label class="block mb-2 font-medium">Operation Type</label>
+        <p-dropdown [options]="typeOptions" [(ngModel)]="filterType" placeholder="All Types" 
+                   (onChange)="applyFilters()" styleClass="w-full"></p-dropdown>
+      </div>
+      <div class="col-12 md:col-2 flex align-items-end">
+        <button pButton pRipple icon="pi pi-filter-slash" label="Reset" class="p-button-outlined w-full" 
+                (click)="resetFilters()"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Job Logs Table -->
+  <div class="card">
+    <p-table [value]="filteredLogs" [paginator]="true" [rows]="10" [showCurrentPageReport]="true" 
+             [rowsPerPageOptions]="[10, 25, 50]" [loading]="loading" 
+             styleClass="p-datatable-striped p-datatable-sm" [sortField]="'start_time'" [sortOrder]="-1"
+             currentPageReportTemplate="Showing {first} to {last} of {totalRecords} logs">
+      <ng-template pTemplate="header">
+        <tr>
+          <th pSortableColumn="operation_id" style="width: 15%">ID <p-sortIcon field="operation_id"></p-sortIcon></th>
+          <th pSortableColumn="operation_type" style="width: 15%">Type <p-sortIcon field="operation_type"></p-sortIcon></th>
+          <th pSortableColumn="start_time" style="width: 20%">Start Time <p-sortIcon field="start_time"></p-sortIcon></th>
+          <th style="width: 15%">Duration</th>
+          <th pSortableColumn="status" style="width: 15%">Status <p-sortIcon field="status"></p-sortIcon></th>
+          <th style="width: 10%">Actions</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-log>
+        <tr>
+          <td>{{ log.operation_id }}</td>
+          <td>
+            <div class="flex align-items-center">
+              <i [class]="getOperationTypeIcon(log.operation_type)" class="mr-2"></i>
+              <span>{{ log.operation_type | titlecase }}</span>
+            </div>
+          </td>
+          <td>{{ formatDate(log.start_time) }}</td>
+          <td>{{ getDuration(log) }}</td>
+          <td>
+            <p-tag [severity]="getStatusSeverity(log.status)" [value]="log.status | titlecase"></p-tag>
+          </td>
+          <td>
+            <button pButton pRipple icon="pi pi-eye" class="p-button-rounded p-button-text" 
+                    pTooltip="View Details" tooltipPosition="top" (click)="showDetailsDialog(log)"></button>
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr>
+          <td colspan="6" class="text-center p-5">
+            <div class="flex flex-column align-items-center">
+              <i class="pi pi-info-circle text-5xl text-700 mb-3"></i>
+              <span>No job logs found</span>
+              <small class="text-500">Try adjusting your filters or refreshing</small>
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </div>
+
+  <!-- Log Details Dialog -->
+  <p-dialog [(visible)]="detailsDialogVisible" [modal]="true" [draggable]="false" [resizable]="false" 
+            header="Job Log Details" [style]="{width: '700px'}" [closeOnEscape]="true">
+    <div class="p-fluid" *ngIf="selectedLog">
+      <div class="flex justify-content-between align-items-center mb-3">
+        <h3 class="m-0">{{ selectedLog.operation_type | titlecase }} Operation</h3>
+        <p-tag [severity]="getStatusSeverity(selectedLog.status)" [value]="selectedLog.status | titlecase"></p-tag>
+      </div>
+      
+      <p-divider></p-divider>
+      
+      <div class="grid">
+        <div class="col-12 md:col-6">
+          <label class="font-bold block mb-2">Operation ID</label>
+          <div class="text-800">{{ selectedLog.operation_id }}</div>
+        </div>
+        <div class="col-12 md:col-6">
+          <label class="font-bold block mb-2">Status</label>
+          <div class="text-800">{{ selectedLog.status | titlecase }}</div>
+        </div>
+        <div class="col-12 md:col-6">
+          <label class="font-bold block mb-2">Start Time</label>
+          <div class="text-800">{{ formatDate(selectedLog.start_time) }}</div>
+        </div>
+        <div class="col-12 md:col-6">
+          <label class="font-bold block mb-2">End Time</label>
+          <div class="text-800">{{ selectedLog.end_time ? formatDate(selectedLog.end_time) : 'N/A' }}</div>
+        </div>
+        <div class="col-12 md:col-6">
+          <label class="font-bold block mb-2">Duration</label>
+          <div class="text-800">{{ getDuration(selectedLog) }}</div>
+        </div>
+        <div class="col-12 md:col-6" *ngIf="selectedLog.repository_id">
+          <label class="font-bold block mb-2">Repository</label>
+          <div class="text-800">{{ selectedLog.repository_id }}</div>
+        </div>
+      </div>
+      
+      <p-divider></p-divider>
+      
+      <!-- Progress information for running jobs -->
+      <div *ngIf="selectedLog.status === 'running' && selectedLog.stats?.progress !== undefined">
+        <h4 class="mb-2">Progress</h4>
+        <p-progressBar [value]="selectedLog.stats.progress"></p-progressBar>
+        <div class="text-center mt-2">{{ selectedLog.stats.progress }}%</div>
+      </div>
+      
+      <!-- Stats section if available -->
+      <div *ngIf="selectedLog.stats" class="mt-3">
+        <h4 class="mb-2">Operation Statistics</h4>
+        <div class="grid">
+          <div class="col-12 md:col-6" *ngIf="selectedLog.stats.files_processed !== undefined">
+            <label class="font-bold block mb-2">Files Processed</label>
+            <div class="text-800">{{ selectedLog.stats.files_processed }}</div>
+          </div>
+          <div class="col-12 md:col-6" *ngIf="selectedLog.stats.bytes_processed !== undefined">
+            <label class="font-bold block mb-2">Data Processed</label>
+            <div class="text-800">{{ (selectedLog.stats.bytes_processed / (1024 * 1024)).toFixed(2) }} MB</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Error information if available -->
+      <div *ngIf="selectedLog.error" class="mt-3">
+        <h4 class="mb-2">Error Details</h4>
+        <div class="p-3 border-round bg-red-50 text-red-700 font-mono text-sm">
+          {{ selectedLog.error }}
+        </div>
+      </div>
+    </div>
+    
+    <ng-template pTemplate="footer">
+      <button pButton pRipple label="Close" icon="pi pi-times" class="p-button-outlined" (click)="detailsDialogVisible = false"></button>
+    </ng-template>
+  </p-dialog>
+</main>

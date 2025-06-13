@@ -1,0 +1,686 @@
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
+
+<p-toast></p-toast>
+<p-confirmDialog></p-confirmDialog>
+
+<!-- Top Navigation Bar (Fixed) -->
+<div id="topbar" class="flex align-items-center justify-content-end px-5 py-3 border-bottom-1 surface-border"
+     style="background:#111317; position:fixed; top:0; left:0; right:0; height:64px; z-index:1001;">
+  <div class="flex align-items-center gap-4">
+    <p-splitButton 
+      [label]="username" 
+      icon="pi pi-user" 
+      class="p-button-text p-button-rounded p-button-plain text-white"
+      [model]="splitButtonItems"
+      [style]="{ width: 'auto' }"
+    ></p-splitButton>
+  </div>
+</div>
+
+<!-- Sidebar (Fixed) -->
+<aside id="sidebar" class="flex flex-column justify-content-between"
+       style="position:fixed; top:64px; left:0; width:260px; height:calc(100vh - 64px); background:#111317; z-index:1000;">
+  <div>
+    <div class="flex align-items-center px-4 py-4 border-bottom-1 surface-border">
+      <img src="/whitecapebcklogo.png" alt="Logo" height="65" />
+    </div>
+    
+    <!-- Navigation -->
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'dashboard']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-home mr-2"></i>
+          <span>Dashboard</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'users']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-users mr-2"></i>
+          <span>Users</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'backups']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-database mr-2"></i>
+          <span>Backups</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'plans']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1 bg-blue-600">
+          <i class="pi pi-calendar mr-2"></i>
+          <span>Plans</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'repos']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-server mr-2"></i>
+          <span>Repos</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'restore']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-replay mr-2"></i>
+          <span>Restore</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0 mb-4">
+      <li>
+        <a [routerLink]="['/', tenantName, 'job-logs']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-history mr-2"></i>
+          <span>Job logs</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'analytics']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-chart-line mr-2"></i>
+          <span>Analytics</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</aside>
+
+<!-- Main Content Area -->
+<main style="
+    position: fixed;
+    top: 64px;
+    left: 260px;
+    width: calc(100vw - 260px);
+    height: calc(100vh - 64px);
+    background: #23272f;
+    padding: 2rem;
+    overflow: auto;
+">
+  <!-- Page Header -->
+  <div class="flex justify-content-between align-items-center mb-4">
+    <div>
+      <h2 class="text-3xl font-bold text-white mb-0">Backup Plans <span class="text-xl text-400 ml-1">({{ plans.length }})</span></h2>
+      <p class="text-400 mt-1">Manage your scheduled backup plans</p>
+    </div>
+    <div class="flex gap-2">
+      <button pButton icon="pi pi-plus" label="Create Plan" class="p-button-success" (click)="showCreatePlanDialog()"></button>
+      <button pButton icon="pi pi-refresh" class="p-button-outlined p-button-secondary" (click)="loadPlans()"></button>
+    </div>
+  </div>
+
+  <!-- Plans Table -->
+  <p-table 
+    #dt
+    [value]="plans" 
+    [rows]="10" 
+    [paginator]="true"
+    [rowsPerPageOptions]="[5, 10, 25, 50]"
+    [loading]="loading"
+    [rowHover]="true"
+    dataKey="id"
+    styleClass="p-datatable-sm"
+    [globalFilterFields]="['name', 'repository_name', 'server_name', 'formatted_schedule']"
+    responsiveLayout="scroll"
+  >
+    <ng-template pTemplate="caption">
+      <div class="flex flex-wrap">
+        <span class="p-input-icon-left ml-auto">
+          <i class="pi pi-search"></i>
+          <input pInputText type="text" placeholder="Search plans..." (input)="applyFilter($event)"/>
+        </span>
+      </div>
+    </ng-template>
+    
+    <!-- Update the header template -->
+    <ng-template pTemplate="header">
+      <tr>
+        <th pSortableColumn="name">Name <p-sortIcon field="name"></p-sortIcon></th>
+        <th pSortableColumn="repository_name">Repository <p-sortIcon field="repository_name"></p-sortIcon></th>
+        <th pSortableColumn="server_name">Server <p-sortIcon field="server_name"></p-sortIcon></th>
+        <th pSortableColumn="server_ip">IP Address <p-sortIcon field="server_ip"></p-sortIcon></th>
+        <th pSortableColumn="formatted_schedule">Schedule <p-sortIcon field="formatted_schedule"></p-sortIcon></th>
+        <th pSortableColumn="status">Status <p-sortIcon field="status"></p-sortIcon></th>
+        <th style="width: 15rem">Actions</th>
+      </tr>
+    </ng-template>
+    
+    <!-- Update the body template -->
+    <ng-template pTemplate="body" let-plan>
+      <tr>
+        <td>
+          <span class="font-medium">{{ plan.name }}</span>
+        </td>
+        <td>{{ plan.repository_name }}</td>
+        <td>{{ plan.server_name }}</td>
+        <td>
+          <span class="font-mono text-xs">{{ plan.server_ip }}</span>
+        </td>
+        <td>
+          <span class="font-mono text-xs">{{ plan.formatted_schedule }}</span>
+        </td>
+        <td>
+          <p-tag [value]="plan.status" [severity]="plan.statusSeverity"></p-tag>
+        </td>
+        <td>
+          <div class="flex gap-2">
+            <button pButton pRipple icon="pi pi-info-circle" class="p-button-rounded p-button-text" 
+                    pTooltip="View Details" (click)="showPlanDetails(plan)"></button>
+            <button pButton pRipple icon="pi pi-pencil" class="p-button-rounded p-button-text" 
+                    pTooltip="Edit Plan" (click)="editPlan(plan)"></button>
+            <button pButton pRipple [icon]="plan.status === 'Active' ? 'pi pi-pause' : 'pi pi-play'" 
+                    class="p-button-rounded p-button-text" 
+                    [pTooltip]="plan.status === 'Active' ? 'Pause Plan' : 'Activate Plan'"
+                    (click)="togglePlanStatus(plan)"></button>
+            <button pButton pRipple icon="pi pi-play" class="p-button-rounded p-button-success p-button-text" 
+                    pTooltip="Execute Now" (click)="executePlanNow(plan)"></button>
+            <button pButton pRipple icon="pi pi-trash" class="p-button-rounded p-button-danger p-button-text" 
+                    pTooltip="Delete Plan" (click)="deletePlan(plan)"></button>
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+    
+    <ng-template pTemplate="emptymessage">
+      <tr>
+        <td colspan="6" class="text-center p-4">
+          <div class="flex flex-column align-items-center">
+            <i class="pi pi-calendar text-5xl text-400 mb-3"></i>
+            <span class="text-xl text-400">No backup plans found</span>
+            <span class="text-sm text-400 mt-2">Create a backup plan to get started</span>
+            <button pButton icon="pi pi-plus" label="Create Plan" class="p-button-success p-button-sm mt-3" (click)="showCreatePlanDialog()"></button>
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+
+  <!-- Plan Details Dialog -->
+  <p-dialog [(visible)]="planDetailsVisible" [style]="{width: '750px'}" [header]="editMode ? 'Edit Backup Plan' : 'Backup Plan Details'" [modal]="true" styleClass="p-fluid custom-dialog">
+    <div *ngIf="selectedPlan" class="dialog-content">
+      <p-tabView styleClass="plans-tab-view">
+        <p-tabPanel header="General">
+          <div class="grid">
+            <div class="col-12 md:col-6">
+              <div class="field">
+                <label class="font-medium">Name</label>
+                <input type="text" pInputText [(ngModel)]="selectedPlan.name" [readonly]="!editMode" class="w-full" />
+              </div>
+            </div>
+            
+            <!-- Repository Selection -->
+            <div class="col-12 md:col-6">
+              <div class="field">
+                <label class="font-medium">Repository</label>
+                <div *ngIf="!editMode">
+                  <input type="text" pInputText [value]="selectedPlan.repository_name" readonly class="w-full" />
+                </div>
+                <div *ngIf="editMode">
+                  <p-dropdown [options]="repositories" [(ngModel)]="selectedPlan.repository_id" 
+                            optionLabel="name" optionValue="id"
+                            (onChange)="changeRepository()"
+                            placeholder="Select Repository"
+                            styleClass="w-full"></p-dropdown>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-12 md:col-6">
+              <div class="field">
+                <label class="font-medium">Server</label>
+                <input type="text" pInputText [value]="selectedPlan.server_name" readonly class="w-full" />
+              </div>
+            </div>
+            
+            <div class="col-12 md:col-6">
+              <div class="field">
+                <label class="font-medium">Status</label>
+                <div>
+                  <p-dropdown *ngIf="editMode" [options]="[
+                      {label: 'Active', value: 'Active'},
+                      {label: 'Paused', value: 'Paused'}
+                    ]" [(ngModel)]="selectedPlan.status" styleClass="w-full"></p-dropdown>
+                  <p-tag *ngIf="!editMode" [value]="selectedPlan.status" [severity]="selectedPlan.statusSeverity"></p-tag>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-12 md:col-6">
+              <div class="field">
+                <label class="font-medium">Last Executed</label>
+                <input type="text" pInputText [value]="selectedPlan.last_run ? (selectedPlan.last_run | date:'medium') : 'Never'" readonly class="w-full" />
+              </div>
+            </div>
+          </div>
+        </p-tabPanel>
+        
+        <p-tabPanel header="Schedule">
+          <div class="grid">
+            <div class="col-12">
+              <div class="field">
+                <label class="font-medium">Schedule Type</label>
+                <div *ngIf="!editMode">{{ selectedPlan.schedule?.cron ? 'Scheduled' : 'Manual Only' }}</div>
+                <div *ngIf="editMode">
+                  <p-dropdown [options]="[
+                      {label: 'Scheduled', value: 'cron'},
+                      {label: 'Manual Only', value: 'manual'}
+                    ]" [(ngModel)]="selectedPlan.scheduleType" styleClass="w-full"></p-dropdown>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-12" *ngIf="(editMode && selectedPlan.scheduleType === 'cron') || (!editMode && selectedPlan.schedule?.cron)">
+              <div class="field">
+                <label class="font-medium">Cron Expression</label>
+                <input type="text" pInputText [(ngModel)]="selectedPlan.schedule.cron" [readonly]="!editMode" class="w-full" />
+                <small *ngIf="editMode" class="text-500">Format: minute hour day-of-month month day-of-week</small>
+                <small *ngIf="!editMode" class="text-500">{{ selectedPlan.formatted_schedule }}</small>
+              </div>
+            </div>
+          </div>
+        </p-tabPanel>
+        
+        <p-tabPanel header="Paths & Exclusions">
+          <div class="grid">
+            <div class="col-12">
+              <div class="field">
+                <label class="font-medium">Backup Paths</label>
+                <div *ngIf="!editMode">
+                  <div *ngFor="let path of selectedPlan.paths" class="mb-1">
+                    <p-chip [label]="path" styleClass="mr-2"></p-chip>
+                  </div>
+                  <div *ngIf="!selectedPlan.paths?.length" class="text-500">No paths specified</div>
+                </div>
+                <div *ngIf="editMode">
+                  <div *ngFor="let path of selectedPlan.paths; let i = index" class="p-inputgroup mb-2">
+                    <input type="text" pInputText [(ngModel)]="selectedPlan.paths[i]"
+                          (click)="$event.stopPropagation()" 
+                          (keydown)="$event.stopPropagation()">
+                    <button type="button" pButton icon="pi pi-trash" class="p-button-danger" 
+                            (click)="selectedPlan.paths.splice(i, 1)"></button>
+                  </div>
+                  <button type="button" pButton icon="pi pi-plus" label="Add Path" class="p-button-outlined p-button-sm" 
+                          (click)="selectedPlan.paths.push('')"></button>
+                </div>
+              </div>
+            </div>
+            
+            <div class="col-12">
+              <div class="field">
+                <label class="font-medium">Exclude Patterns</label>
+                <div *ngIf="!editMode">
+                  <div *ngFor="let exclude of selectedPlan.excludes" class="mb-1">
+                    <p-chip [label]="exclude" styleClass="mr-2"></p-chip>
+                  </div>
+                  <div *ngIf="!selectedPlan.excludes?.length" class="text-500">No exclusion patterns</div>
+                </div>
+                <div *ngIf="editMode">
+                  <div *ngFor="let exclude of selectedPlan.excludes; let i = index" class="p-inputgroup mb-2">
+                    <input type="text" pInputText [(ngModel)]="selectedPlan.excludes[i]"
+                          (click)="$event.stopPropagation()" 
+                          (keydown)="$event.stopPropagation()">
+                    <button type="button" pButton icon="pi pi-trash" class="p-button-danger" 
+                            (click)="selectedPlan.excludes.splice(i, 1)"></button>
+                  </div>
+                  <button type="button" pButton icon="pi pi-plus" label="Add Exclusion Pattern" class="p-button-outlined p-button-sm" 
+                          (click)="selectedPlan.excludes.push('')"></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </p-tabPanel>
+        
+        <p-tabPanel header="Retention">
+          <div class="grid">
+            <div class="col-12 md:col-6 lg:col-4">
+              <div class="field">
+                <label class="font-medium">Keep Last N</label>
+                <input type="number" pInputText [(ngModel)]="selectedPlan.retention.keepLastN" [readonly]="!editMode" class="w-full">
+                <small class="text-500">Number of most recent backups to keep</small>
+              </div>
+            </div>
+            <div class="col-12 md:col-6 lg:col-4">
+              <div class="field">
+                <label class="font-medium">Keep Hourly</label>
+                <input type="number" pInputText [(ngModel)]="selectedPlan.retention.hourly" [readonly]="!editMode" class="w-full">
+                <small class="text-500">Number of hourly backups to keep</small>
+              </div>
+            </div>
+            <div class="col-12 md:col-6 lg:col-4">
+              <div class="field">
+                <label class="font-medium">Keep Daily</label>
+                <input type="number" pInputText [(ngModel)]="selectedPlan.retention.daily" [readonly]="!editMode" class="w-full">
+                <small class="text-500">Number of daily backups to keep</small>
+              </div>
+            </div>
+            <div class="col-12 md:col-6 lg:col-4">
+              <div class="field">
+                <label class="font-medium">Keep Weekly</label>
+                <input type="number" pInputText [(ngModel)]="selectedPlan.retention.weekly" [readonly]="!editMode" class="w-full">
+                <small class="text-500">Number of weekly backups to keep</small>
+              </div>
+            </div>
+            <div class="col-12 md:col-6 lg:col-4">
+              <div class="field">
+                <label class="font-medium">Keep Monthly</label>
+                <input type="number" pInputText [(ngModel)]="selectedPlan.retention.monthly" [readonly]="!editMode" class="w-full">
+                <small class="text-500">Number of monthly backups to keep</small>
+              </div>
+            </div>
+            <div class="col-12 md:col-6 lg:col-4">
+              <div class="field">
+                <label class="font-medium">Keep Yearly</label>
+                <input type="number" pInputText [(ngModel)]="selectedPlan.retention.yearly" [readonly]="!editMode" class="w-full">
+                <small class="text-500">Number of yearly backups to keep</small>
+              </div>
+            </div>
+          </div>
+        </p-tabPanel>
+      </p-tabView>
+    </div>
+    
+    <ng-template pTemplate="footer">
+      <button pButton pRipple label="Close" icon="pi pi-times" class="p-button-text" *ngIf="!editMode" 
+              (click)="planDetailsVisible = false"></button>
+      <button pButton pRipple label="Cancel" icon="pi pi-times" class="p-button-text" *ngIf="editMode" 
+              (click)="planDetailsVisible = false"></button>
+      <button pButton pRipple label="Save Changes" icon="pi pi-check" *ngIf="editMode"
+              (click)="savePlan()"></button>
+      <button pButton pRipple label="Execute Plan" icon="pi pi-play" class="p-button-success" *ngIf="!editMode" 
+              (click)="executePlanNow(selectedPlan); planDetailsVisible = false"></button>
+      <button pButton pRipple label="Edit" icon="pi pi-pencil" class="p-button-primary" *ngIf="!editMode" 
+              (click)="editMode = true"></button>
+    </ng-template>
+  </p-dialog>
+
+  <!-- Create Plan Dialog -->
+  <p-dialog header="Create Backup Plan" [(visible)]="createPlanDialogVisible" [modal]="true" [style]="{width: '650px'}" [draggable]="false" [resizable]="false">
+    <div class="grid p-fluid">
+      <!-- Plan Selection Type -->
+      <div class="col-12 field">
+        <label for="planType" class="font-medium">Plan Type</label>
+        <div class="flex flex-column gap-3 mt-2">
+          <div class="field-radiobutton flex align-items-center">
+            <p-radioButton id="cyclePlan" name="planType" value="cycle" [(ngModel)]="newPlan.planType" inputId="cyclePlan"></p-radioButton>
+            <label for="cyclePlan" class="ml-2">Weekly Full / Daily Incremental Cycle</label>
+          </div>
+          <div class="field-radiobutton flex align-items-center">
+            <p-radioButton id="customPlan" name="planType" value="custom" [(ngModel)]="newPlan.planType" inputId="customPlan"></p-radioButton>
+            <label for="customPlan" class="ml-2">Custom Plan</label>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Cycle Plan Info Box -->
+      <div class="col-12 mb-3" *ngIf="newPlan.planType === 'cycle'">
+        <div class="p-3 border-round bg-primary-50 text-primary">
+          <div class="font-medium mb-2">Weekly/Monthly Cycle Plan</div>
+          <p class="m-0 line-height-3 text-sm">
+            This preconfigured plan will create:
+          </p>
+          <ul class="text-sm pl-3 line-height-3">
+            <li>A full backup every Monday</li>
+            <li>Incremental backups Tuesday-Sunday</li>
+            <li>Monthly rotation (keeps the last Monday's full backup of each month)</li>
+          </ul>
+        </div>
+      </div>
+      
+      <!-- Plan Name -->
+      <div class="col-12 field">
+        <label for="planName" class="font-medium">Plan Name</label>
+        <input id="planName" type="text" pInputText [(ngModel)]="newPlan.name" placeholder="monday_full_backup">
+        <small *ngIf="newPlan.planType === 'cycle'">Two plans will be created with "_full" and "_incremental" suffixes</small>
+      </div>
+      
+      <!-- Repository Selection -->
+      <div class="col-12 field">
+        <label for="planRepository" class="font-medium">Repository</label>
+        <p-dropdown id="planRepository" 
+                    [options]="repositories" 
+                    [(ngModel)]="newPlan.repository" 
+                    (onChange)="onRepositoryChange($event)"
+                    optionLabel="name" 
+                    dataKey="repository_id"
+                    styleClass="w-full"
+                    [scrollHeight]="'250px'"
+                    placeholder="Select a repository">
+          <ng-template pTemplate="selectedItem">
+            <div class="flex align-items-center" *ngIf="newPlan.repository">
+              <i class="pi pi-database mr-2"></i>
+              <div>{{newPlan.repository.name}}</div>
+            </div>
+          </ng-template>
+          <ng-template let-repo pTemplate="item">
+            <div class="flex align-items-center">
+              <i class="pi pi-database mr-2"></i>
+              <div>{{repo.name}}</div>
+            </div>
+          </ng-template>
+        </p-dropdown>
+        <small *ngIf="repositories.length === 0" class="p-error">No repositories available. Please create a repository first.</small>
+        <small *ngIf="newPlan.repository" class="text-500">
+          Server: {{newPlan.server_name || 'Unknown'}}
+        </small>
+      </div>
+      
+      <!-- Path and Exclusions for Cycle Plans -->
+      <div class="col-12" *ngIf="newPlan.planType === 'cycle'">
+        <!-- Path Selection -->
+        <div class="field">
+          <label class="font-medium">Backup Paths</label>
+          <div class="p-inputgroup mb-2" *ngFor="let path of newPlan.paths; let i = index">
+            <input type="text" pInputText [(ngModel)]="newPlan.paths[i]" placeholder="/path/to/backup">
+            <button type="button" pButton icon="pi pi-trash" class="p-button-danger" (click)="removePath(i)"></button>
+          </div>
+          <button type="button" pButton icon="pi pi-plus" label="Add Path" class="p-button-outlined p-button-sm" 
+                  (click)="addPath()"></button>
+          <small class="text-500">Default paths include /etc, /home, and /var/www</small>
+        </div>
+        
+        <!-- Excludes -->
+        <div class="field">
+          <label class="font-medium flex align-items-center">
+            Exclude Patterns
+            <i class="pi pi-question-circle ml-2 text-primary cursor-pointer"
+               pTooltip="Patterns to exclude from backup (e.g. *.tmp, *.log)" 
+               tooltipPosition="right"></i>
+          </label>
+          <div class="p-inputgroup mb-2" *ngFor="let exclude of newPlan.excludes; let i = index">
+            <input type="text" pInputText [(ngModel)]="newPlan.excludes[i]" placeholder="*.tmp">
+            <button type="button" pButton icon="pi pi-trash" class="p-button-danger" (click)="removeExclude(i)"></button>
+          </div>
+          <button type="button" pButton icon="pi pi-plus" label="Add Exclude Pattern" class="p-button-outlined p-button-sm" 
+                  (click)="addExclude()"></button>
+          <small class="text-500">Default excludes are *.tmp and *.log</small>
+        </div>
+      </div>
+      
+      <!-- Custom Plan Options (only show if custom plan selected) -->
+      <div class="col-12" *ngIf="newPlan && newPlan.planType === 'custom'">
+        <!-- Path Selection -->
+        <div class="field">
+          <label class="font-medium">Backup Paths</label>
+          <div class="p-inputgroup mb-2" *ngFor="let path of newPlan.paths; let i = index">
+            <input type="text" pInputText [(ngModel)]="newPlan.paths[i]" placeholder="/path/to/backup">
+            <button type="button" pButton icon="pi pi-trash" class="p-button-danger" (click)="removePath(i)"></button>
+          </div>
+          <button type="button" pButton icon="pi pi-plus" label="Add Path" class="p-button-outlined p-button-sm" 
+                  (click)="addPath()"></button>
+        </div>
+        
+        <!-- Excludes -->
+        <div class="field">
+          <label class="font-medium flex align-items-center">
+            Exclude Patterns
+            <i class="pi pi-question-circle ml-2 text-primary cursor-pointer"
+               pTooltip="Patterns to exclude from backup (e.g. *.tmp, *.log)" 
+               tooltipPosition="right"></i>
+          </label>
+          <div class="p-inputgroup mb-2" *ngFor="let exclude of newPlan.excludes; let i = index">
+            <input type="text" pInputText [(ngModel)]="newPlan.excludes[i]" placeholder="*.tmp">
+            <button type="button" pButton icon="pi pi-trash" class="p-button-danger" (click)="removeExclude(i)"></button>
+          </div>
+          <button type="button" pButton icon="pi pi-plus" label="Add Exclude Pattern" class="p-button-outlined p-button-sm" 
+                  (click)="addExclude()"></button>
+        </div>
+        
+        <!-- Backup Schedule -->
+        <div class="field">
+          <label class="font-medium">Backup Schedule</label>
+          <div class="p-fluid grid formgrid">
+            <!-- Schedule Type Selection -->
+            <div class="field col-12">
+              <label for="scheduleType" class="font-medium">Schedule Type</label>
+              <div class="flex flex-wrap gap-3">
+                <div class="flex align-items-center">
+                  <p-radioButton id="schedule-disabled" name="scheduleType" [value]="'disabled'" 
+                                [(ngModel)]="newPlan.scheduleType"></p-radioButton>
+                  <label for="schedule-disabled" class="ml-2 font-normal">Disabled</label>
+                </div>
+                <div class="flex align-items-center">
+                  <p-radioButton id="schedule-cron" name="scheduleType" [value]="'cron'" 
+                                [(ngModel)]="newPlan.scheduleType"></p-radioButton>
+                  <label for="schedule-cron" class="ml-2 font-normal">Cron Schedule</label>
+                </div>
+                <div class="flex align-items-center">
+                  <p-radioButton id="schedule-interval" name="scheduleType" [value]="'interval'" 
+                                [(ngModel)]="newPlan.scheduleType"></p-radioButton>
+                  <label for="schedule-interval" class="ml-2 font-normal">Interval</label>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Cron Schedule Options -->
+            <div *ngIf="newPlan.scheduleType === 'cron'" class="field">
+              <label>Schedule Frequency</label>
+              <p-dropdown [options]="cronFrequencyOptions" [(ngModel)]="cronFrequency" 
+                (onChange)="updateCronExpression()" styleClass="w-full"></p-dropdown>
+              
+              <div class="mt-3">
+                <label>Run at</label>
+                <div class="flex align-items-center gap-2">
+                  <!-- Time selection (hour/minute) -->
+                  <div class="flex gap-2" *ngIf="cronFrequency !== 'hourly'">
+                    <p-inputNumber [(ngModel)]="cronHour" [min]="0" [max]="23" 
+                      (onInput)="updateCronExpression()" placeholder="Hour (0-23)"></p-inputNumber>
+                    <span class="mt-2">:</span>
+                  </div>
+                  <p-inputNumber [(ngModel)]="cronMinute" [min]="0" [max]="59" 
+                    (onInput)="updateCronExpression()" placeholder="Minute (0-59)"></p-inputNumber>
+                  <span *ngIf="cronFrequency !== 'hourly'" class="mt-2">
+                    ({{ cronHour | number:'2.0-0' }}:{{ cronMinute | number:'2.0-0' }})
+                  </span>
+                </div>
+              </div>
+              
+              <!-- Day of week selector (for weekly) -->
+              <div class="mt-3" *ngIf="cronFrequency === 'weekly'">
+                <label>Day of Week</label>
+                <p-dropdown [options]="daysOfWeekOptions" [(ngModel)]="cronDayOfWeek" 
+                  (onChange)="updateCronExpression()" styleClass="w-full"></p-dropdown>
+              </div>
+              
+              <!-- Day of month selector (for monthly) -->
+              <div class="mt-3" *ngIf="cronFrequency === 'monthly'">
+                <label>Day of Month</label>
+                <p-inputNumber [(ngModel)]="cronDayOfMonth" [min]="1" [max]="31" 
+                  (onInput)="updateCronExpression()" styleClass="w-full"></p-inputNumber>
+              </div>
+              
+              <div class="mt-3">
+                <label>Resulting Cron Expression</label>
+                <div class="p-inputgroup">
+                  <input type="text" pInputText [(ngModel)]="newPlan.cronExpression" readonly />
+                  <span class="p-inputgroup-addon" pTooltip="This is the generated cron expression">
+                    <i class="pi pi-info-circle"></i>
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Interval Schedule Options -->
+            <div class="field col-12" *ngIf="newPlan.scheduleType === 'interval'">
+              <div class="grid">
+                <div class="col-6">
+                  <label for="intervalValue" class="font-medium">Interval Value</label>
+                  <p-inputNumber id="intervalValue" [(ngModel)]="newPlan.intervalValue" 
+                              [showButtons]="true" [min]="1" [max]="999"></p-inputNumber>
+                </div>
+                <div class="col-6">
+                  <label for="intervalUnit" class="font-medium">Interval Unit</label>
+                  <p-dropdown id="intervalUnit" [options]="intervalUnitOptions" [(ngModel)]="newPlan.intervalUnit"
+                            optionLabel="label" optionValue="value"></p-dropdown>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Retention Policy -->
+        <div class="field">
+          <h3>Retention Policy</h3>
+          <div class="p-field-radiobutton">
+            <label>Policy Type</label>
+            <div class="flex gap-2">
+              <div *ngFor="let option of retentionTypeOptions" class="p-field-radiobutton">
+                <p-radioButton [value]="option.value" [(ngModel)]="newPlan.retentionType" [inputId]="'retention_' + option.value"></p-radioButton>
+                <label [for]="'retention_' + option.value" class="ml-2">{{option.label}}</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Keep Last N Backups (for 'count' retention type) -->
+          <div *ngIf="newPlan.retentionType === 'count'" class="mt-3">
+            <label>Number of backups to keep</label>
+            <p-inputNumber [(ngModel)]="newPlan.retention.keepLastN" [min]="1" [max]="999" styleClass="w-full"></p-inputNumber>
+          </div>
+
+          <!-- Time-based retention (for 'time-period' retention type) -->
+          <div *ngIf="newPlan.retentionType === 'time-period'" class="mt-3">
+            <div class="grid">
+              <div class="col-6">
+                <label>Yearly backups to keep</label>
+                <p-inputNumber [(ngModel)]="newPlan.retention.yearly" [min]="0" styleClass="w-full"></p-inputNumber>
+              </div>
+              <div class="col-6">
+                <label>Monthly backups to keep</label>
+                <p-inputNumber [(ngModel)]="newPlan.retention.monthly" [min]="0" styleClass="w-full"></p-inputNumber>
+              </div>
+              <div class="col-6 mt-2">
+                <label>Weekly backups to keep</label>
+                <p-inputNumber [(ngModel)]="newPlan.retention.weekly" [min]="0" styleClass="w-full"></p-inputNumber>
+              </div>
+              <div class="col-6 mt-2">
+                <label>Daily backups to keep</label>
+                <p-inputNumber [(ngModel)]="newPlan.retention.daily" [min]="0" styleClass="w-full"></p-inputNumber>
+              </div>
+              <div class="col-6 mt-2">
+                <label>Hourly backups to keep</label>
+                <p-inputNumber [(ngModel)]="newPlan.retention.hourly" [min]="0" styleClass="w-full"></p-inputNumber>
+              </div>
+              <div class="col-6 mt-2">
+                <label>Latest snapshots to keep</label>
+                <p-inputNumber [(ngModel)]="newPlan.retention.keepLastN" [min]="0" styleClass="w-full"></p-inputNumber>
+              </div>
+            </div>
+          </div>
+
+          <!-- No additional options needed for 'none' retention type -->
+          <div *ngIf="newPlan.retentionType === 'none'" class="mt-3">
+            <p class="text-info">All backups will be kept indefinitely.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <ng-template pTemplate="footer">
+      <button pButton pRipple label="Cancel" icon="pi pi-times" class="p-button-text" 
+              (click)="createPlanDialogVisible = false"></button>
+      <button pButton pRipple label="Create Plan" icon="pi pi-check" class="p-button-success" 
+              [loading]="isCreatingPlan"
+              [disabled]="!canCreatePlan()"
+              (click)="createPlan()"></button>
+    </ng-template>
+  </p-dialog>
+</main>

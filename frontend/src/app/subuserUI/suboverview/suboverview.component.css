@@ -1,0 +1,360 @@
+:host {
+  display: block;
+  height: 100%;
+  background-color: #1a1d21;
+  color: white;
+}
+
+.top-bar {
+  background-color: #111317;
+  height: 60px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  border-bottom: 1px solid #2d3035;
+}
+
+.logo-container {
+  display: flex;
+  align-items: center;
+}
+
+.sidebar {
+  position: fixed;
+  top: 60px;
+  left: 0;
+  bottom: 0;
+  width: 220px;
+  background-color: #111317;
+  border-right: 1px solid #2d3035;
+  overflow-y: auto;
+  z-index: 999;
+}
+
+.nav-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  color: white;
+  text-decoration: none;
+  transition: background-color 0.2s;
+}
+
+.nav-link:hover, .nav-link.active {
+  background-color: #3186ea;
+  border-radius: 4px;
+  margin: 4px;
+}
+
+.nav-link i {
+  margin-right: 8px;
+}
+
+.main-content {
+  margin-left: 220px;
+  margin-top: 60px;
+  padding: 20px;
+  height: calc(100vh - 60px);
+  overflow-y: auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.card {
+  background-color: #2d3035;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+  height: 100%;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #374151;
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-title h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.card-content {
+  padding: 20px;
+}
+
+.protected-item {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #374151;
+}
+
+.protected-item:last-child {
+  border-bottom: none;
+}
+
+.item-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16px;
+}
+
+.item-icon.database {
+  background-color: #3186ea;
+}
+
+.item-icon.files {
+  background-color: #22c55e;
+}
+
+.item-details {
+  flex: 1;
+}
+
+.item-details h3 {
+  margin: 0 0 5px 0;
+  font-size: 1rem;
+}
+
+.item-meta {
+  display: flex;
+  gap: 15px;
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
+.storage-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 20px 0;
+}
+
+.storage-chart {
+  position: relative;
+  width: 180px;
+  height: 180px;
+}
+
+.storage-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.storage-label .used {
+  font-size: 1.25rem;
+  font-weight: bold;
+}
+
+.storage-label .total {
+  font-size: 0.875rem;
+  color: #9ca3af;
+}
+
+.storage-details {
+  padding-left: 20px;
+}
+
+.storage-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.storage-item .storage-label {
+  display: flex;
+  align-items: center;
+  position: static;
+  transform: none;
+}
+
+.color-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.color-indicator.used {
+  background-color: #22c55e;
+}
+
+.color-indicator.remaining {
+  background-color: #e5e7eb;
+}
+
+.activity-item {
+  padding: 5px 0;
+}
+
+.activity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.activity-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.activity-date {
+  font-size: 0.875rem;
+  color: #9ca3af;
+}
+
+.activity-description {
+  margin-top: 5px;
+  font-size: 0.875rem;
+}
+
+.custom-marker {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #ffffff;
+}
+
+/* PrimeNG Overrides */
+:host ::ng-deep .p-timeline .p-timeline-event-opposite {
+  display: none;
+}
+
+:host ::ng-deep .p-timeline .p-timeline-event-content {
+  padding: 0 0 0 1rem;
+}
+
+:host ::ng-deep .p-dialog {
+  background-color: #2d3035;
+  color: white;
+}
+
+:host ::ng-deep .p-dialog .p-dialog-header {
+  background-color: #2d3035;
+  color: white;
+  border-bottom: 1px solid #374151;
+}
+
+:host ::ng-deep .p-dialog .p-dialog-content {
+  background-color: #2d3035;
+  color: white;
+}
+
+:host ::ng-deep .p-dialog .p-dialog-footer {
+  background-color: #2d3035;
+  color: white;
+  border-top: 1px solid #374151;
+}
+
+:host ::ng-deep .p-inputtext {
+  background-color: #23272f;
+  color: white;
+  border: 1px solid #374151;
+}
+
+:host ::ng-deep .p-dropdown {
+  background-color: #23272f;
+}
+
+:host ::ng-deep .p-dropdown .p-dropdown-label {
+  color: white;
+}
+
+:host ::ng-deep .p-button.p-button-text {
+  color: white;
+}
+
+/* Custom marker for timeline */
+:host ::ng-deep .custom-marker {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  color: #ffffff;
+}
+
+:host ::ng-deep .recent-actions-timeline .p-timeline-event-content,
+:host ::ng-deep .recent-actions-timeline .p-timeline-event-opposite {
+  line-height: 1;
+  padding: 0 1rem;
+}
+
+:host ::ng-deep .recent-actions-timeline .p-timeline-event {
+  min-height: 70px;
+}
+
+:host ::ng-deep .recent-actions-timeline .p-timeline-event-opposite {
+  display: none;
+}
+
+/* Make accordion blend with theme */
+:host ::ng-deep .p-accordion .p-accordion-header .p-accordion-header-link {
+  background: #1e1e1e;
+  color: white;
+  border: 1px solid #383838;
+}
+
+:host ::ng-deep .p-accordion .p-accordion-content {
+  background: #1e1e1e;
+  color: white;
+  border: 1px solid #383838;
+}
+
+:host ::ng-deep .p-accordion .p-accordion-header:not(.p-disabled).p-highlight .p-accordion-header-link {
+  background: #252525;
+  border-color: #3186ea;
+  color: white;
+}
+
+:host ::ng-deep .p-accordion .p-accordion-header:not(.p-highlight):not(.p-disabled):hover .p-accordion-header-link {
+  background: #2a2a2a;
+  border-color: #3186ea;
+  color: white;
+}

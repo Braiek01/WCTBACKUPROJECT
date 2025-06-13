@@ -1,0 +1,189 @@
+<link rel="stylesheet" href="https://unpkg.com/primeflex@latest/primeflex.css">
+<link rel="stylesheet" href="https://unpkg.com/primeicons@latest/primeicons.css">
+
+<p-toast></p-toast>
+<p-confirmDialog [style]="{width: '450px'}" header="Confirm" icon="pi pi-exclamation-triangle"></p-confirmDialog>
+
+<!-- Top Navigation Bar (Fixed) -->
+<div id="topbar" class="flex align-items-center justify-content-end px-5 py-3 border-bottom-1 surface-border"
+     style="background:#111317; position:fixed; top:0; left:0; right:0; height:64px; z-index:1001;">
+  <div class="flex align-items-center gap-4">
+    <p-splitButton 
+      [label]="username" 
+      icon="pi pi-user" 
+      class="p-button-text p-button-rounded p-button-plain text-white"
+      [model]="splitButtonItems"
+      [style]="{ width: 'auto' }"
+    ></p-splitButton>
+  </div>
+</div>
+
+<!-- Sidebar (Fixed) -->
+<aside id="sidebar" class="flex flex-column justify-content-between"
+       style="position:fixed; top:64px; left:0; width:260px; height:calc(100vh - 64px); background:#111317; z-index:1000;">
+  <div>
+    <div class="flex align-items-center px-4 py-4 border-bottom-1 surface-border">
+      <img src="/whitecapebcklogo.png" alt="Logo" height="65" />
+    </div>
+    
+    <!-- Navigation -->
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'dashboard']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-home mr-2"></i>
+          <span>Dashboard</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0">
+      <li>
+        <a [routerLink]="['/', tenantName, 'users']" class="flex align-items-center px-4 py-3 text-white bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-users mr-2"></i>
+          <span>Users</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'backups']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-database mr-2"></i>
+          <span>Backups</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'plans']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-calendar mr-2"></i>
+          <span>Plans</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'repos']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-server mr-2"></i>
+          <span>Repos</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'restore']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-replay mr-2"></i>
+          <span>Restore</span>
+        </a>
+      </li>
+    </ul>
+    
+    <ul class="list-none p-0 m-0 mb-4">
+      <li>
+        <a [routerLink]="['/', tenantName, 'job-logs']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-history mr-2"></i>
+          <span>Job logs</span>
+        </a>
+      </li>
+      <li>
+        <a [routerLink]="['/', tenantName, 'analytics']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-chart-line mr-2"></i>
+          <span>Analytics</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</aside>
+
+<!-- Main Content (Fixed, No Scroll) -->
+<main style="
+    position: fixed;
+    top: 64px;
+    left: 260px;
+    width: calc(100vw - 260px);
+    height: calc(100vh - 64px);
+    background: #23272f;
+    padding: 2rem;
+    overflow: auto;
+">
+    <!-- Header with breadcrumb -->
+    <div class="flex align-items-center justify-content-between mb-4">
+        <div class="flex align-items-center">
+            <nav class="flex align-items-center">
+                <a [routerLink]="['/', tenantName, 'users']" class="text-500 hover:text-white cursor-pointer no-underline">
+                    <i class="pi pi-users mr-2"></i>Users
+                </a>
+                <i class="pi pi-angle-right mx-2 text-500"></i>
+                <span class="font-medium text-white">{{user?.username || 'User Details'}}</span>
+            </nav>
+        </div>
+        <div class="flex gap-2">
+            <button pButton pRipple label="Back to Users" icon="pi pi-arrow-left" class="p-button-outlined p-button-secondary" [routerLink]="['/', tenantName, 'users']"></button>
+            <button pButton pRipple label="Save Changes" icon="pi pi-save" class="p-button-success" (click)="saveChanges()" [disabled]="!formChanged"></button>
+        </div>
+    </div>
+
+    <!-- User Details Card -->
+    <div class="card p-0">
+        <p-tabView>
+            <!-- Profile Tab -->
+            <p-tabPanel header="Profile">
+                <div class="p-fluid grid formgrid">
+                    <div class="field col-12 md:col-6">
+                        <label for="accountName">Account Name</label>
+                        <input id="accountName" pInputText [(ngModel)]="user.first_name" placeholder="Enter name" (ngModelChange)="onFormChange()"/>
+                    </div>
+
+                    <div class="field col-12 md:col-6">
+                        <label for="email">Email</label>
+                        <input id="email" pInputText [(ngModel)]="user.email" type="email" placeholder="Email address" (ngModelChange)="onFormChange()"/>
+                    </div>
+                    <div class="field col-12 md:col-6">
+                        <label for="username">Username</label>
+                        <input id="username" pInputText [(ngModel)]="user.username" placeholder="Username" [disabled]="true"/>
+                    </div>
+                    <div class="field col-12 md:col-6">
+                        <label for="role">Tenant Role</label>
+                        <p-dropdown id="role" [options]="roleOptions" [(ngModel)]="selectedRole" optionLabel="name" (onChange)="updateRole()"></p-dropdown>
+                    </div>
+                    <div class="field col-12 md:col-6">
+                        <label for="status">Status</label>
+                        <p-inputSwitch [(ngModel)]="user.is_active" (onChange)="onFormChange()"></p-inputSwitch>
+                        <label class="ml-2">{{user.is_active ? 'Active' : 'Inactive'}}</label>
+                    </div>
+                </div>
+            </p-tabPanel>
+
+            <!-- Password Tab -->
+            <p-tabPanel header="Password">
+                <div class="p-fluid">
+                    <div class="field">
+                        <label for="newPassword">New Password</label>
+                        <p-password id="newPassword" [(ngModel)]="passwordData.newPassword" [toggleMask]="true" [feedback]="true" (ngModelChange)="onPasswordFormChange()"></p-password>
+                    </div>
+                    <div class="field">
+                        <label for="confirmPassword">Confirm Password</label>
+                        <p-password id="confirmPassword" [(ngModel)]="passwordData.confirmPassword" [toggleMask]="true" (ngModelChange)="onPasswordFormChange()"></p-password>
+                    </div>
+                    <div class="field-checkbox">
+                        <p-checkbox [(ngModel)]="user.allow_admin_reset" [binary]="true" inputId="allowReset" (onChange)="onFormChange()"></p-checkbox>
+                        <label for="allowReset" class="ml-2">Allow administrator to reset password</label>
+                    </div>
+                    <div class="field-checkbox">
+                        <p-checkbox [(ngModel)]="user.require_password_change" [binary]="true" inputId="requireChange" (onChange)="onFormChange()"></p-checkbox>
+                        <label for="requireChange" class="ml-2">Require user to change password at next login</label>
+                    </div>
+                    <div class="flex justify-content-end mt-4">
+                        <button pButton pRipple label="Reset Password" icon="pi pi-key" class="p-button-warning" 
+                                [disabled]="!passwordData.newPassword || passwordData.newPassword !== passwordData.confirmPassword"
+                                (click)="resetPassword()"></button>
+                    </div>
+                </div>
+            </p-tabPanel>
+
+            <!-- Other Tabs -->
+            <p-tabPanel header="Backups">
+                <p>Backup information and settings for this user would be displayed here.</p>
+            </p-tabPanel>
+            
+            <p-tabPanel header="Job Logs">
+                <p>User job logs and activity would be displayed here.</p>
+            </p-tabPanel>
+            
+            <p-tabPanel header="Policies">
+                <p>User-specific policies and permissions would be managed here.</p>
+            </p-tabPanel>
+        </p-tabView>
+    </div>
+</main>
