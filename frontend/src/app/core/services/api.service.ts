@@ -89,6 +89,29 @@ export class ApiService {
     );
   }
 
+  // Add or modify this method to ensure tenant context is included
+  private getFullUrl(endpoint: string): string {
+    // Get tenant name from context
+    const tenantName = this.tenantContext.getTenantName();
+    
+    // Base API URL from environment
+    let baseUrl = environment.tenantApiUrlPattern;
+    
+    // If we have a tenant name and the URL doesn't already include it
+    if (tenantName && !baseUrl.includes(tenantName)) {
+      // Replace domain with tenant subdomain
+      // E.g., http://localhost:8000 becomes http://tenant.localhost:8000
+      baseUrl = baseUrl.replace(
+        /^(https?:\/\/)([^.]+\.[^\/]+|localhost(?::[0-9]+)?)(.*)$/,
+        `$1${tenantName}.$2$3`
+      );
+    }
+    
+    // Ensure endpoint is properly normalized
+    const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    return `${baseUrl}/api${path}`;
+  }
+
   private handleError(error: any): Observable<never> {
     console.error('ApiService: An error occurred', error);
     

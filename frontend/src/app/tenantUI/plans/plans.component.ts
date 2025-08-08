@@ -652,21 +652,30 @@ export class PlansComponent implements OnInit {
   }
 
   executePlanNow(plan: any) {
-    // Show loading indicator if needed
+    // Show loading indicator
     plan.executing = true;
     
-    this.apiService.post(`backrest/plans/${plan.id}/trigger_backup`, {}).subscribe({
-      next: () => {
+    console.log('Executing plan:', plan);
+    
+    this.apiService.post(`backrest/plans/${plan.id}/trigger_backup/`, {}).subscribe({
+      next: (response) => {
         plan.executing = false;
+        console.log('Backup triggered successfully:', response);
+        
+        const res = response as { operation_id?: string };
         this.messageService.add({
           severity: 'success',
           summary: 'Success',
-          detail: 'Backup execution started'
+          detail: `Backup started for plan "${plan.name}". Operation ID: ${res.operation_id || 'N/A'}`
         });
+        
+        // Optionally redirect to job logs to see progress
+        // this.router.navigate([`/${this.tenantName}/job-logs`]);
       },
       error: (err) => {
         plan.executing = false;
         console.error('Error executing plan:', err);
+        
         this.messageService.add({
           severity: 'error',
           summary: 'Error',

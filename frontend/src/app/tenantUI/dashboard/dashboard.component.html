@@ -108,6 +108,9 @@
     <div class="flex gap-2">
       <button pButton pRipple label="Create Repository" (click)="showCreateRepoDialog()" icon="pi pi-database" class="p-button-primary"></button>
       <button pButton pRipple label="Create Plan" (click)="showCreatePlanDialog()" icon="pi pi-calendar" class="p-button-success"></button>
+      <button pButton pRipple label="Force Sync" icon="pi pi-sync" 
+        class="p-button-outlined p-button-success ml-2"
+        (click)="syncBackrestData()"></button>
     </div>
   </div>
 

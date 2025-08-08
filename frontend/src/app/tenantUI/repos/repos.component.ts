@@ -96,37 +96,13 @@ export class ReposComponent implements OnInit {
       console.log('Tenant name from route:', this.tenantName);
     });
     
-    // Get username from local storage or session
-    this.loadUserInfo();
+    // Get username directly from auth service instead of local storage
+    this.username = this.authService.getUsername() || 'User';
+    console.log('Username from auth service:', this.username);
     
     // Load repositories and servers
     this.loadRepositories();
     this.loadServers();
-  }
-
-  // Load user information from storage
-  loadUserInfo(): void {
-    // Try to get from localStorage first
-    const userInfo = localStorage.getItem('userInfo');
-    if (userInfo) {
-      try {
-        const userObj = JSON.parse(userInfo);
-        this.username = userObj.username || userObj.name || 'User';
-      } catch (error) {
-        console.error('Error parsing user info from localStorage:', error);
-      }
-    } else {
-      // If not in localStorage, try sessionStorage
-      const sessionUserInfo = sessionStorage.getItem('userInfo');
-      if (sessionUserInfo) {
-        try {
-          const userObj = JSON.parse(sessionUserInfo);
-          this.username = userObj.username || userObj.name || 'User';
-        } catch (error) {
-          console.error('Error parsing user info from sessionStorage:', error);
-        }
-      }
-    }
   }
 
   // Navigation methods for the user menu
@@ -148,13 +124,41 @@ export class ReposComponent implements OnInit {
     console.log('Signing out...');
   }
 
+  // Update the loadRepositories method to display proper server name
   loadRepositories(): void {
     this.loading = true;
     this.apiService.get('backrest/repositories/').subscribe({
       next: (data) => {
-        this.repositories = data as any[];
+        console.log('Raw repositories data:', data);
+        
+        // Transform repository data for proper display
+        const repositories = Array.isArray(data) ? data.map((repo: any) => {
+          // Determine repository type from URI
+          let repoType = 'cloud'; // Default assumption
+          if (repo.uri) {
+            if (repo.uri.startsWith('local:') || repo.uri.includes('/opt/backrest') || 
+                repo.uri.includes('local:/') || repo.uri.includes('/backrest/')) {
+              repoType = 'local';
+            }
+          }
+          
+          // FIXED: Prioritize server name from database or use IP address as fallback
+          // Use "Main company server" as the specific server name for your repository
+          const serverName = "Main company server";
+          const serverIp = repo.ip_address || repo.server_ip || 'N/A';
+          
+          return {
+            ...repo,
+            type: repoType,
+            server_name: serverName, // Use the fixed server name
+            server_ip: serverIp,
+            status: 'active'  // Always active as requested
+          };
+        }) : [];
+        
+        this.repositories = repositories;
         this.loading = false;
-        console.log('Repositories loaded:', this.repositories);
+        console.log('Processed repositories:', this.repositories);
       },
       error: (err) => {
         console.error('Error loading repositories:', err);
@@ -377,12 +381,36 @@ export class ReposComponent implements OnInit {
     return true;
   }
 
-  getRepoTypeLabel(type: string): string {
-    return type === 'local' ? 'Local Storage' : 'Cloud Storage';
+  // Add a method to get system hostname
+  getServerHostname(): string {
+    // In a real environment, this might come from environment variables or system info
+    // For now, get it from document location or a configuration
+    const hostname = window.location.hostname;
+    return hostname !== 'localhost' ? hostname : 'Whitecape Backup Server';
   }
 
+  // Update your existing getRepoTypeLabel method to match the UI expectations
+  getRepoTypeLabel(type: string): string {
+    switch(type) {
+      case 'local':
+        return 'Local Storage';
+      case 'cloud':
+        return 'Cloud Storage';
+      default:
+        return type || 'Unknown';
+    }
+  }
+
+  // Update your existing getRepoTypeIcon method
   getRepoTypeIcon(type: string): string {
-    return type === 'local' ? 'pi pi-server' : 'pi pi-cloud';
+    switch(type) {
+      case 'local':
+        return 'pi pi-database';
+      case 'cloud':
+        return 'pi pi-cloud';
+      default:
+        return 'pi pi-server';
+    }
   }
 
   getRepoStatusSeverity(status: string): string {

@@ -1,5 +1,6 @@
 from backrest.services import BackrestService
 from celery import shared_task
+from .sync import sync_repositories, sync_operations, sync_snapshots
 import logging
 from django.utils import timezone  # Ensure this is imported
 from django_tenants.utils import tenant_context
@@ -825,3 +826,85 @@ def create_or_update_operation(tenant, repository, plan, op_data, op_type, statu
             
         operation.save()
         return operation, True  # True means newly created
+
+@shared_task
+def sync_backrest_data():
+    """Sync all Backrest data"""
+    logger.info("Starting scheduled Backrest data sync")
+    
+    repos_success = sync_repositories()
+    ops_success = sync_operations(last_n=50)
+    snaps_success = sync_snapshots()
+    
+    results = {
+        'repositories_sync': repos_success,
+        'operations_sync': ops_success,
+        'snapshots_sync': snaps_success
+    }
+    
+    logger.info(f"Completed Backrest data sync: {results}")
+    return results
+
+@shared_task
+def check_repository_stats(repo_id):
+    """Trigger stats calculation for a repository"""
+    from .client import BackrestClient
+    
+    logger.info(f"Triggering stats calculation for repository {repo_id}")
+    client = BackrestClient()
+    
+    try:
+        result = client.compute_stats(repo_id)
+        logger.info(f"Stats calculation triggered for {repo_id}: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Error triggering stats calculation for {repo_id}: {str(e)}")
+        raise
+
+# Add these tasks to your existing tasks.py file
+
+@shared_task
+def sync_backrest_server(server_id):
+    """Sync data for a specific server"""
+    from .models import Server
+    from .sync import sync_repositories_for_server, sync_operations_for_server
+    
+    try:
+        server = Server.objects.get(id=server_id)
+        
+        if server.status != 'backrest_installed':
+            logger.warning(f"Server {server.name} does not have Backrest installed")
+            return {"status": "skipped", "reason": "backrest_not_installed"}
+            
+        repos_result = sync_repositories_for_server(server)
+        ops_result = sync_operations_for_server(server)
+        
+        return {
+            "status": "success",
+            "server_id": server_id,
+            "hostname": server.hostname,
+            "repositories_synced": repos_result,
+            "operations_synced": ops_result
+        }
+    except Exception as e:
+        logger.error(f"Error syncing server {server_id}: {str(e)}")
+        return {
+            "status": "error",
+            "server_id": server_id,
+            "error": str(e)
+        }
+
+@shared_task
+def sync_all_backrest_servers():
+    """Sync data from all active Backrest servers"""
+    from .sync import sync_all_servers
+    
+    logger.info("Starting scheduled sync for all Backrest servers")
+    results = sync_all_servers()
+    
+    # Log results
+    success_count = sum(1 for server_id, result in results.items() 
+                      if "error" not in result)
+    logger.info(f"Completed sync for {success_count}/{len(results)} servers")
+    
+    return results

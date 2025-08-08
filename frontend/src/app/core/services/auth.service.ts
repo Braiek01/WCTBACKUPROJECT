@@ -145,6 +145,12 @@ export class AuthService {
     return this._accessToken ?? this.getItem(this.ACCESS_TOKEN_KEY);
   }
 
+  setAccessToken(token: string): void {
+    this._accessToken = token;
+    this.setItem(this.ACCESS_TOKEN_KEY, token);
+    this.loggedIn.next(!!token);
+  }
+
   getRefreshToken(): string | null {
      return this._refreshToken ?? this.getItem(this.REFRESH_TOKEN_KEY);
   }
@@ -265,13 +271,43 @@ export class AuthService {
     );
   }
   
-  // Updated to use the shared service
+  // Add this method to handle role-based redirection
+  handleRoleBasedRedirect(): void {
+    const tenantName = this.getTenantName();
+    if (!tenantName) return;
+    
+    // Get the user's role
+    const userRole = this.getUserRole()?.toLowerCase();
+    console.log('Redirecting based on role:', userRole);
+    
+    // Redirect based on role
+    if (userRole === 'operator' || userRole === 'viewer') {
+      console.log('Operator/viewer role detected, redirecting to subuser UI');
+      this.router.navigate(['/', tenantName, 'subuser', 'dashboard']);
+    } else {
+      console.log('Admin/owner role detected, redirecting to admin dashboard');
+      this.router.navigate(['/', tenantName, 'dashboard']);
+    }
+  }
+
+  // Replace the checkSetupStatus method with this updated version
   private checkSetupStatus(): void {
     // Use setTimeout to defer this call until after all services are initialized
     setTimeout(() => {
-      // Call SetupService directly instead of through tenantContext
+      // Check setup status and redirect accordingly
       this.setupService.forceCheckSetupStatus().subscribe({
-        next: (status) => console.log('Setup status checked after login:', status),
+        next: (status) => {
+          console.log('Setup status checked after login:', status);
+          
+          const tenantName = this.getTenantName();
+          if (tenantName && status.setupNeeded === true) {
+            console.log('Setup needed, redirecting to setup component');
+            this.router.navigate(['/', tenantName, 'setup']);
+          } else if (tenantName) {
+            // Instead of always going to dashboard, use role-based redirection
+            this.handleRoleBasedRedirect();
+          }
+        },
         error: (err) => console.error('Failed to check setup status after login:', err)
       });
     }, 0);
@@ -361,5 +397,45 @@ export class AuthService {
         localStorage.setItem('user_role', user.role_in_tenant);
       }
     }
+  }
+
+  checkAndRefreshToken(): void {
+    // Check if token exists
+    const token = this.getAccessToken();
+    if (!token) return;
+    
+    // Check if token is expired or close to expiry
+    try {
+      // Simple check - parse the token and get expiry
+      const tokenPayload = JSON.parse(atob(token.split('.')[1]));
+      const expiryTime = tokenPayload.exp * 1000; // Convert to milliseconds
+      const currentTime = new Date().getTime();
+      
+      // If token expires in less than 5 minutes, refresh it
+      if (expiryTime - currentTime < 300000) {
+        this.refreshToken().subscribe({
+          next: (response) => {
+            // Save new token
+            this.setAccessToken(response.access);
+          },
+          error: (error) => {
+            console.error('Token refresh failed:', error);
+            // Redirect to login if refresh fails
+            this.logout();
+            window.location.href = '/login';
+          }
+        });
+      }
+    } catch (e) {
+      console.error('Error checking token expiry:', e);
+    }
+  }
+
+  // Add this method to refresh token
+  refreshToken(): Observable<any> {
+    const refreshToken = localStorage.getItem('refresh_token');
+    return this.http.post<any>(`${environment.publicApiUrl}/api/token/refresh/`, {
+      refresh: refreshToken
+    });
   }
 }

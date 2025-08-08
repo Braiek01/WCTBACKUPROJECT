@@ -17,6 +17,7 @@ import { RestoreComponent } from './tenantUI/restore/restore.component';
 import { JobLogsComponent } from './tenantUI/joblogs/joblogs.component';
 import { ProfileComponent } from './tenantUI/profile/profile.component';
 import { AnalyticsComponent } from './tenantUI/analytics/analytics.component';
+import { operatorGuard } from './core/guards/role.guard';
 
 
 export const routes: Routes = [
@@ -32,26 +33,27 @@ export const routes: Routes = [
     path: ':tenantName', 
     canActivate: [tenantGuard, authGuard],
     children: [
-      // Tenant admin routes
+      // Setup route (available to all)
       {
         path: 'setup',
         component: SetupWizardComponent
       },
+      
+      // Admin routes - add adminGuard to all admin routes
       {
         path: 'dashboard',
         component: DashboardComponent,
-        canActivate: [authGuard]
+        canActivate: [authGuard, setupRequiredGuard]
       },
       {
         path: 'users',
-        loadComponent: () => import('./tenantUI/users/users.component')
+        loadComponent: () => import('../app/tenantUI/users/users.component')
           .then(m => m.UsersComponent),
         canActivate: [authGuard]
       },
       {
         path: 'users/:username',
-        canActivate: [tenantGuard],
-        loadComponent: () => import('./tenantUI/user-details/user-details.component')
+        loadComponent: () => import('../app/tenantUI/user-details/user-details.component')
           .then(c => c.UserDetailsComponent)
       },
       {
@@ -90,41 +92,40 @@ export const routes: Routes = [
         canActivate: [authGuard]
       },
       
-      // SubUser routes
+      // SubUser routes - add operatorGuard
       {
         path: 'suboverview',
         loadComponent: () => import('./subuserUI/suboverview/suboverview.component')
           .then(m => m.SuboverviewComponent),
-        canActivate: [authGuard]
+        canActivate: [authGuard, operatorGuard]
       },
       {
         path: 'subbackup',
         loadComponent: () => import('./subuserUI/subbackup/subbackup.component')
           .then(m => m.SubbackupComponent),
-        canActivate: [authGuard]
+        canActivate: [authGuard, operatorGuard]
       },
       {
         path: 'subrestore',
         loadComponent: () => import('./subuserUI/subrestore/subrestore.component')
           .then(m => m.SubrestoreComponent),
-        canActivate: [authGuard]
+        canActivate: [authGuard, operatorGuard]
       },
       {
         path: 'subjob-logs',
         loadComponent: () => import('./subuserUI/subjoblogs/subjoblogs.component')
           .then(m => m.SubjoblogsComponent),
-        canActivate: [authGuard]
+        canActivate: [authGuard, operatorGuard]
       },
       {
         path: 'subuser-profile',
           loadComponent: () => import('./subuserUI/subuser-profile/subuser-profile.component').then(m => m.SubuserProfileComponent),
-        canActivate: [authGuard]      },
+        canActivate: [authGuard, operatorGuard]      
+      },
       
-      // Default route
-      { path: '', redirectTo: 'dashboard', pathMatch: 'full' }
+ 
     ]
   },
   
-  // Fallback route
-  { path: '**', redirectTo: '' }
+ 
 ];

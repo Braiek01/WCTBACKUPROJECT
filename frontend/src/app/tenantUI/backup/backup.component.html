@@ -182,23 +182,25 @@
       </div>
     </ng-template>
     
+    <!-- Replace the Table Header section -->
     <ng-template pTemplate="header">
       <tr>
         <th style="width: 3rem">
           <p-tableHeaderCheckbox></p-tableHeaderCheckbox>
         </th>
-        <th pSortableColumn="name">Name <p-sortIcon field="name"></p-sortIcon></th>
+        <th pSortableColumn="name">Type <p-sortIcon field="name"></p-sortIcon></th>
         <th pSortableColumn="snapshot_id">Snapshot ID <p-sortIcon field="snapshot_id"></p-sortIcon></th>
         <th pSortableColumn="repository">Repository <p-sortIcon field="repository"></p-sortIcon></th>
-        <th pSortableColumn="storage_type">Storage Type <p-sortIcon field="storage_type"></p-sortIcon></th>
         <th pSortableColumn="server">Server <p-sortIcon field="server"></p-sortIcon></th>
         <th pSortableColumn="size">Size <p-sortIcon field="size"></p-sortIcon></th>
         <th pSortableColumn="status">Status <p-sortIcon field="status"></p-sortIcon></th>
         <th pSortableColumn="created_at">Created <p-sortIcon field="created_at"></p-sortIcon></th>
+        <th pSortableColumn="duration">Duration <p-sortIcon field="duration"></p-sortIcon></th>
         <th style="width: 8rem">Actions</th>
       </tr>
     </ng-template>
     
+    <!-- Replace the Table Body section -->
     <ng-template pTemplate="body" let-backup>
       <tr>
         <td>
@@ -206,25 +208,33 @@
         </td>
         <td>
           <span class="font-medium">{{ backup.name }}</span>
+          <div *ngIf="backup.tags && backup.tags.length > 0" class="mt-1">
+            <p-tag *ngFor="let tag of backup.tags" 
+                   [value]="tag.replace('plan:', '').replace('created-by:', '')" 
+                   severity="info" 
+                   class="mr-1 text-xs">
+            </p-tag>
+          </div>
         </td>
         <td>
-          <span class="font-mono text-xs">{{ backup.snapshot_id }}</span>
-        </td>
-        <td>{{ backup.repository }}</td>
-        <td>
-          <span [class]="'storage-badge ' + backup.storage_type">
-            <i *ngIf="backup.storage_type === 'local'" class="pi pi-hdd mr-1"></i>
-            <i *ngIf="backup.storage_type === 's3'" class="pi pi-amazon mr-1"></i>
-            <i *ngIf="backup.storage_type === 'azure'" class="pi pi-cloud mr-1"></i>
-            {{ backup.storage_type }}
+          <span 
+            class="font-mono text-xs" 
+            [pTooltip]="backup.snapshot_id" 
+            tooltipPosition="top"
+            tooltipClass="font-mono"
+            [escape]="false"
+          >
+            {{ backup.snapshot_id.substring(0, 10) }}...
           </span>
         </td>
+        <td>{{ backup.repository }}</td>
         <td>{{ backup.server }}</td>
         <td>{{ backup.sizeMB }}</td>
         <td>
           <p-tag [value]="backup.status" [severity]="backup.statusSeverity"></p-tag>
         </td>
-        <td>{{ backup.created_at | date:'medium' }}</td>
+        <td>{{ backup.created_at | date:'short' }}</td>
+        <td>{{ backup.duration }}</td>
         <td>
           <div class="flex gap-2">
             <button pButton pRipple icon="pi pi-info-circle" class="p-button-rounded p-button-text" 
@@ -249,84 +259,168 @@
     </ng-template>
   </p-table>
 
-  <!-- Backup Details Dialog -->
-  <p-dialog [(visible)]="backupDetailDialog" [style]="{width: '650px'}" header="Backup Details" [modal]="true" styleClass="p-fluid">
-    <ng-template pTemplate="content" *ngIf="selectedBackup">
-      <div class="grid">
+  <!-- Backup Details Dialog - Fix the visibility binding -->
+  <p-dialog 
+    [(visible)]="backupDetailDialog" 
+    [style]="{width: '700px'}" 
+    header="Snapshot Details" 
+    [modal]="true" 
+    [closable]="true"
+    [closeOnEscape]="true"
+    styleClass="p-fluid"
+    [maximizable]="true">
+    
+    <ng-template pTemplate="content">
+      <div *ngIf="selectedBackup" class="grid">
         <div class="col-12 md:col-6 lg:col-4">
           <div class="field">
-            <label class="font-medium">Name</label>
-            <div>{{ selectedBackup.name }}</div>
+            <label class="font-medium text-900">Type</label>
+            <div class="mt-1">{{ selectedBackup.name }}</div>
           </div>
         </div>
+        
         <div class="col-12 md:col-6 lg:col-4">
           <div class="field">
-            <label class="font-medium">Repository</label>
-            <div>{{ selectedBackup.repository }}</div>
+            <label class="font-medium text-900">Repository</label>
+            <div class="mt-1">{{ selectedBackup.repository }}</div>
           </div>
         </div>
+        
         <div class="col-12 md:col-6 lg:col-4">
           <div class="field">
-            <label class="font-medium">Server</label>
-            <div>{{ selectedBackup.server }}</div>
+            <label class="font-medium text-900">Server</label>
+            <div class="mt-1">{{ selectedBackup.server }}</div>
           </div>
         </div>
+        
         <div class="col-12 md:col-6 lg:col-4">
           <div class="field">
-            <label class="font-medium">Storage Type</label>
-            <div>{{ selectedBackup.storage_type }}</div>
+            <label class="font-medium text-900">Size</label>
+            <div class="mt-1">{{ selectedBackup.sizeMB }}</div>
           </div>
         </div>
+        
         <div class="col-12 md:col-6 lg:col-4">
           <div class="field">
-            <label class="font-medium">Status</label>
-            <div>
+            <label class="font-medium text-900">Status</label>
+            <div class="mt-1">
               <p-tag [value]="selectedBackup.status" [severity]="selectedBackup.statusSeverity"></p-tag>
             </div>
           </div>
         </div>
+        
         <div class="col-12 md:col-6 lg:col-4">
           <div class="field">
-            <label class="font-medium">Size</label>
-            <div>{{ selectedBackup.sizeMB }}</div>
+            <label class="font-medium text-900">Created</label>
+            <div class="mt-1">{{ selectedBackup.created_at | date:'medium' }}</div>
           </div>
         </div>
-        <div class="col-12">
+        
+        <div class="col-12 md:col-6 lg:col-4">
           <div class="field">
-            <label class="font-medium">Snapshot ID</label>
-            <div class="font-mono text-xs p-2 surface-ground border-round">{{ selectedBackup.snapshot_id }}</div>
-          </div>
-        </div>
-        <div class="col-12 md:col-6">
-          <div class="field">
-            <label class="font-medium">Created At</label>
-            <div>{{ selectedBackup.created_at | date:'medium' }}</div>
-          </div>
-        </div>
-        <div class="col-12 md:col-6">
-          <div class="field">
-            <label class="font-medium">Duration</label>
-            <div>{{ selectedBackup.duration }} minutes</div>
+            <label class="font-medium text-900">Duration</label>
+            <div class="mt-1">{{ selectedBackup.duration }}</div>
           </div>
         </div>
 
-        <!-- If there are paths backed up -->
-        <div class="col-12" *ngIf="selectedBackup.paths?.length">
+        <!-- Snapshot ID -->
+        <div class="col-12">
           <div class="field">
-            <label class="font-medium">Paths Backed Up</label>
-            <ul class="list-none p-0 m-0">
-              <li *ngFor="let path of selectedBackup.paths" class="mb-1">
-                <span class="font-mono text-xs">{{ path }}</span>
-              </li>
-            </ul>
+            <label class="font-medium text-900">Snapshot ID</label>
+            <div class="font-mono text-xs p-2 surface-100 border-round mt-1 word-break-all">
+              {{ selectedBackup.snapshot_id }}
+            </div>
           </div>
         </div>
+
+        <!-- Tags -->
+        <div class="col-12" *ngIf="selectedBackup.tags?.length">
+          <div class="field">
+            <label class="font-medium text-900">Tags</label>
+            <div class="flex flex-wrap gap-1 mt-1">
+              <p-tag *ngFor="let tag of selectedBackup.tags" 
+                     [value]="tag" 
+                     severity="info"
+                     class="text-xs">
+              </p-tag>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paths -->
+        <div class="col-12" *ngIf="selectedBackup.paths?.length">
+          <div class="field">
+            <label class="font-medium text-900">Paths Backed Up</label>
+            <div class="mt-1">
+              <ul class="list-none p-0 m-0 p-2 surface-100 border-round max-h-10rem overflow-auto">
+                <li *ngFor="let path of selectedBackup.paths" class="mb-1 last:mb-0">
+                  <span class="font-mono text-sm">{{ path }}</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Summary Information -->
+        <div class="col-12" *ngIf="selectedBackup.summary">
+          <div class="field">
+            <label class="font-medium text-900">Backup Summary</label>
+            <div class="grid mt-1">
+              <div class="col-6 md:col-3" *ngIf="selectedBackup.summary.filesNew != null">
+                <div class="text-center p-2 surface-100 border-round">
+                  <div class="text-xl font-bold text-primary">{{ selectedBackup.summary.filesNew | number }}</div>
+                  <div class="text-xs text-600">New Files</div>
+                </div>
+              </div>
+              <div class="col-6 md:col-3" *ngIf="selectedBackup.summary.dirsNew != null">
+                <div class="text-center p-2 surface-100 border-round">
+                  <div class="text-xl font-bold text-primary">{{ selectedBackup.summary.dirsNew | number }}</div>
+                  <div class="text-xs text-600">New Directories</div>
+                </div>
+              </div>
+              <div class="col-6 md:col-3" *ngIf="selectedBackup.summary.dataBlobs != null">
+                <div class="text-center p-2 surface-100 border-round">
+                  <div class="text-xl font-bold text-primary">{{ selectedBackup.summary.dataBlobs | number }}</div>
+                  <div class="text-xs text-600">Data Blobs</div>
+                </div>
+              </div>
+              <div class="col-6 md:col-3" *ngIf="selectedBackup.summary.dataAdded != null">
+                <div class="text-center p-2 surface-100 border-round">
+                  <div class="text-xl font-bold text-primary">{{ formatSize(selectedBackup.summary.dataAdded) }}</div>
+                  <div class="text-xs text-600">Data Added</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Loading state if no backup selected -->
+      <div *ngIf="!selectedBackup" class="text-center p-4">
+        <i class="pi pi-spin pi-spinner text-4xl text-400"></i>
+        <div class="mt-3 text-600">Loading backup details...</div>
       </div>
     </ng-template>
     
     <ng-template pTemplate="footer">
-      <button pButton pRipple label="Close" icon="pi pi-times" class="p-button-text" (click)="backupDetailDialog = false"></button>
-      <button pButton pRipple label="Restore" icon="pi pi-replay" class="p-button-primary"></button>
+      <div class="flex justify-content-between">
+        <button pButton pRipple 
+                label="Close" 
+                icon="pi pi-times" 
+                class="p-button-text" 
+                (click)="closeBackupDetails()">
+        </button>
+        <div class="flex gap-2">
+
+          <button pButton pRipple 
+                  label="Restore" 
+                  icon="pi pi-replay" 
+                  class="p-button-primary"
+                  (click)="restoreBackup(selectedBackup)"
+                  [disabled]="!selectedBackup">
+          </button>
+        </div>
+      </div>
     </ng-template>
   </p-dialog>
 </main>

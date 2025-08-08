@@ -966,20 +966,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
   
   createCustomPlan() {
-    // For debugging
-    console.log('Repository from form:', this.newPlan.repository);
-    
-    // Get repository ID properly - KEEPING EXISTING LOGIC
+    // Get repository ID properly
     let repositoryId;
     
     if (typeof this.newPlan.repository === 'object' && this.newPlan.repository !== null) {
-      // If it's an object, extract the ID using bracket notation
       repositoryId = this.newPlan.repository['id'] || this.newPlan.repository['repository_id'];
     } else if (typeof this.newPlan.repository === 'number') {
-      // If it's already a number
       repositoryId = this.newPlan.repository;
     } else if (typeof this.newPlan.repository === 'string') {
-      // If it's a string (potentially already the ID)
       repositoryId = this.newPlan.repository;
     }
     
@@ -995,7 +989,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     } else if (this.newPlan.scheduleType === 'cron') {
       schedule.cron = this.newPlan.cronExpression;
     } else if (this.newPlan.scheduleType === 'interval') {
-      // Determine if it's hours or days
       if (this.newPlan.intervalUnit === 'hours') {
         schedule.maxFrequencyHours = this.newPlan.intervalValue;
       } else if (this.newPlan.intervalUnit === 'days') {
@@ -1004,16 +997,25 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
     
     // Build retention policy based on user selection
-    let retention: any = {};
+    let retention_policy: any = {};
 
-    if (this.newPlan.retentionType === 'count') {
-      // Use policyKeepLastN
-      retention = {
+    // Add debug logging
+    console.log('Retention type selected:', this.newPlan.retentionType);
+
+    if (this.newPlan.retentionType === 'none') {
+      // "Keep all backups" - use policyKeepAll directly without nesting
+      retention_policy = {
+        policyKeepAll: true
+      };
+      console.log('Setting "keep all backups" policy:', retention_policy);
+    } else if (this.newPlan.retentionType === 'count') {
+      // Keep last N backups
+      retention_policy = {
         policyKeepLastN: this.newPlan.retention.keepLastN || 30
       };
     } else if (this.newPlan.retentionType === 'time-period') {
-      // Use policyTimeBucketed
-      retention = {
+      // Time-bucketed policy
+      retention_policy = {
         policyTimeBucketed: {
           yearly: this.newPlan.retention.yearly || 0,
           monthly: this.newPlan.retention.monthly || 0,
@@ -1023,42 +1025,33 @@ export class DashboardComponent implements OnInit, OnDestroy {
           keepLastN: this.newPlan.retention.keepLastN || 0
         }
       };
-    } else if (this.newPlan.retentionType === 'none') {
-      // Use policyKeepAll
-      retention = {
-        policyKeepAll: true
-      };
     }
     
     // Create the payload with the correct structure
     const payload = {
       name: this.newPlan.name,
-      repository: repositoryId.toString(), // Ensure it's a string
+      repository: repositoryId.toString(),
       paths: this.newPlan.paths.filter(path => path.trim() !== ''),
       excludes: this.newPlan.excludes.filter(exc => exc.trim() !== ''),
-      iexcludes: [],
       schedule: schedule,
-      backup_flags: [],
-      retention_policy: retention,
-      hooks: []
+      retention_policy: retention_policy
     };
     
+    // Log the exact payload being sent
     console.log('Sending plan payload:', JSON.stringify(payload, null, 2));
     
-    // Show loading state
     this.isCreatingPlan = true;
     
     this.apiService.post('backrest/plans/', payload).subscribe({
       next: (response: any) => {
         this.isCreatingPlan = false;
-        console.log('Backup plan created:', response);
+        console.log('Plan creation response:', response);
         this.messageService.add({
           severity: 'success',
           summary: 'Plan Created',
           detail: `Backup plan "${this.newPlan.name}" was created successfully`
         });
         this.hideCreatePlanDialog();
-        // Refresh plans list if needed
         this.loadPlans();
       },
       error: (err) => {
@@ -1085,8 +1078,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   
   // --- Backrest Status Methods ---
   checkBackrestStatus() {
+    // Use selectedServerId for status check
+    if (this.selectedServerId === null || this.selectedServerId === undefined) {
+      console.warn('No selectedServerId set, skipping Backrest status check.');
+      this.backrestStatus = 'unknown';
+      this.isBackrestRunning = false;
+      return;
+    }
     // Call your backend API to check if Backrest is running
-    this.apiService.get(`backrest/servers/${this.serverId}/status/`).subscribe({
+    this.apiService.get(`backrest/servers/${this.selectedServerId}/status/`).subscribe({
       next: (response) => {
         const res = response as { status: string };
         this.backrestStatus = res.status;
@@ -1145,5 +1145,48 @@ export class DashboardComponent implements OnInit, OnDestroy {
       default:
         this.newPlan.cronExpression = '0 0 * * *'; // Default to midnight every day
     }
+  }
+
+  // Add this property to your component class
+  loadingBackupStats: boolean = false;
+
+  // Add to analytics.component.ts
+  syncBackrestData(): void {
+    this.loadingBackupStats = true;
+    this.messageService.add({
+      severity: 'info',
+      summary: 'Starting Sync',
+      detail: 'Synchronizing Backrest data...'
+    });
+    
+    // Trigger server-side sync of all Backrest data
+    this.apiService.post('backrest/sync-data/', {}).subscribe({
+      next: (response) => {
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Sync Completed',
+          detail: 'Backrest data synchronized successfully'
+        });
+        
+        // Reload analytics data
+        this.loadAnalyticsData();
+      },
+      error: (err) => {
+        console.error('Failed to sync Backrest data:', err);
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Sync Failed',
+          detail: 'Could not synchronize Backrest data'
+        });
+        this.loadingBackupStats = false;
+      }
+    });
+  }
+
+  // Dummy implementation for analytics data loading to fix the error
+  loadAnalyticsData(): void {
+    // You can implement actual analytics data loading here if needed
+    this.loadingBackupStats = false;
+    // Optionally, refresh chart or stats here
   }
 }

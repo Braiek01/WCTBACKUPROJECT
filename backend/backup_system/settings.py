@@ -294,3 +294,16 @@ CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
+
+# In your settings.py file, ensure these are set:
+USE_TZ = True
+TIME_ZONE = 'UTC'  # Or your preferred timezone
+
+# Also, add this import and function to any file that processes timestamps
+from django.utils import timezone
+
+def make_aware(naive_datetime):
+    """Convert naive datetime to timezone-aware"""
+    if timezone.is_naive(naive_datetime):
+        return timezone.make_aware(naive_datetime)
+    return naive_datetime

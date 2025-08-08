@@ -20,9 +20,10 @@ import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { TooltipModule } from 'primeng/tooltip';
 import { InputTextModule } from 'primeng/inputtext';
 import { SplitButtonModule } from 'primeng/splitbutton';
-
+import { SidebarModule } from 'primeng/sidebar';
 // Services
 import { ApiService } from '../../core/services/api.service';
+import { BackrestService } from '../../core/services/backrest.service';
 
 @Component({
   selector: 'app-backups',
@@ -44,7 +45,9 @@ import { ApiService } from '../../core/services/api.service';
     ConfirmDialogModule,
     TooltipModule,
     InputTextModule,
-    SplitButtonModule
+    SplitButtonModule,
+    SidebarModule
+    
   ],
   providers: [MessageService, ConfirmationService],
   templateUrl: './backup.component.html',
@@ -83,7 +86,8 @@ export class BackupsComponent implements OnInit {
     private apiService: ApiService,
     private route: ActivatedRoute,
     private messageService: MessageService,
-    private confirmationService: ConfirmationService
+    private confirmationService: ConfirmationService,
+    private backrestService: BackrestService  // Add this line
   ) {}
   
   ngOnInit() {
@@ -119,35 +123,111 @@ export class BackupsComponent implements OnInit {
   
   loadBackups() {
     this.loading = true;
+    this.backups = [];
     
-    // Build query parameters based on selected filters
-    let params = new URLSearchParams();
-    if (this.filters.status) {
-      params.append('status', this.filters.status);
-    }
-    if (this.filters.repository) {
-      params.append('repository', this.filters.repository);
-    }
-    if (this.filters.server) {
-      params.append('server', this.filters.server);
-    }
-    
-    const queryString = params.toString() ? `?${params.toString()}` : '';
-    
-    this.apiService.get(`backrest/operations/${queryString}`).subscribe({
-      next: (data: any) => {
-        this.backups = data.map((backup: any) => {
-          return {
-            ...backup,
-            sizeMB: this.formatSize(backup.size || 0),
-            statusSeverity: this.getStatusSeverity(backup.status)
-          };
+    // First load repositories
+    this.backrestService.getRepositories().subscribe({
+      next: (repoResponse) => {
+        const repositories = repoResponse.repositories || [];
+        
+        if (repositories.length === 0) {
+          this.loading = false;
+          return;
+        }
+        
+        // Create promises array for loading snapshots from each repository
+        const promises: Promise<any>[] = [];
+        
+        // For each repository, get its snapshots
+        repositories.forEach((repo: any) => {
+          if (this.filters.repository && repo.repository_id !== this.filters.repository) {
+            return; // Skip if filter is applied and doesn't match
+          }
+          
+          promises.push(
+            new Promise<any[]>((resolve) => {
+              this.backrestService.getSnapshots(repo.repository_id).subscribe({
+                next: (response) => {
+                  const snapshots = response.snapshots || [];
+                  
+                  // Convert snapshots to backup display format
+                  const convertedBackups = snapshots.map((snapshot: any) => {
+                    // Calculate duration if available
+                    let duration = 'N/A';
+                    if (snapshot.summary && snapshot.summary.totalDuration) {
+                      const durationSeconds = parseFloat(snapshot.summary.totalDuration);
+                      duration = this.formatDuration(durationSeconds);
+                    }
+                    
+                    // Get backup size
+                    const size = snapshot.summary?.dataAdded || 0;
+                    
+                    // Determine backup type and name
+                    let backupName = 'Backup';
+                    let backupType = 'manual_backup';
+                    if (snapshot.tags && snapshot.tags.length > 0) {
+                      const planTag = snapshot.tags.find((tag: string) => tag.startsWith('plan:'));
+                      if (planTag) {
+                        backupType = planTag.replace('plan:', '');
+                        backupName = backupType.replace(/_/g, ' ');
+                      }
+                    }
+                    
+                    // Create timestamp from unixTimeMs
+                    const timestamp = snapshot.unixTimeMs ? new Date(parseInt(snapshot.unixTimeMs)) : new Date();
+                    
+                    return {
+                      id: snapshot.id,
+                      snapshot_id: snapshot.id,
+                      name: backupName,
+                      repository: repo.name,
+                      repository_id: repo.repository_id,
+                      storage_type: repo.uri?.startsWith('s3:') ? 's3' : 
+                                   repo.uri?.startsWith('azure:') ? 'azure' : 'local',
+                      server: snapshot.hostname || 'Unknown',
+                      size: size,
+                      sizeMB: this.formatSize(size),
+                      status: 'completed',
+                      statusSeverity: 'success',
+                      created_at: timestamp,
+                      duration: duration,
+                      paths: snapshot.paths || [],
+                      tags: snapshot.tags || []
+                    };
+                  });
+                  
+                  resolve(convertedBackups);
+                },
+                error: () => resolve([])
+              });
+            })
+          );
         });
-        this.loading = false;
-        console.log('Backups loaded with filters:', this.backups);
+        
+        // Process all promises
+        Promise.all(promises).then(allBackups => {
+          // Flatten and filter backups
+          let backups = allBackups.flat();
+          
+          // Apply additional filters
+          if (this.filters.status) {
+            backups = backups.filter(backup => backup.status === this.filters.status);
+          }
+          if (this.filters.server) {
+            backups = backups.filter(backup => backup.server === this.filters.server);
+          }
+          
+          // Sort by creation date (newest first)
+          backups.sort((a, b) => {
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          });
+          
+          this.backups = backups;
+          this.loading = false;
+        });
       },
       error: (err) => {
-        console.error('Error loading backups:', err);
+        console.error('Failed to load repositories:', err);
         this.messageService.add({
           severity: 'error',
           summary: 'Error',
@@ -237,9 +317,14 @@ export class BackupsComponent implements OnInit {
   }
   
   showBackupDetails(backup: any) {
-    this.selectedBackup = backup;
-    this.backupDetailDialog = true;
-  }
+  console.log('Opening backup details for:', backup);
+  this.selectedBackup = { ...backup }; // Create a copy to avoid reference issues
+  this.backupDetailDialog = true;
+  
+  // Debug log to verify
+  console.log('Dialog should be visible:', this.backupDetailDialog);
+  console.log('Selected backup:', this.selectedBackup);
+}
   
   onFilter() {
     // Apply filters to API request
@@ -261,4 +346,47 @@ export class BackupsComponent implements OnInit {
       this.dt.filterGlobal(target.value, 'contains');
     }
   }
+  
+  // Add this helper method to format duration
+  formatDuration(seconds: number): string {
+    if (!seconds && seconds !== 0) return 'N/A';
+    
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    
+    let result = '';
+    if (hours > 0) result += `${hours}h `;
+    if (minutes > 0 || hours > 0) result += `${minutes}m `;
+    if (secs > 0 || (hours === 0 && minutes === 0)) result += `${secs}s`;
+    
+    return result.trim();
+  }
+
+
+
+
+// Add these new methods
+closeBackupDetails() {
+  this.backupDetailDialog = false;
+  this.selectedBackup = null;
+}
+
+downloadBackup(backup: any) {
+  // Implement download functionality
+  this.messageService.add({
+    severity: 'info',
+    summary: 'Download',
+    detail: `Download functionality for ${backup.name} is not yet implemented`
+  });
+}
+
+restoreBackup(backup: any) {
+  // Navigate to restore page with this backup selected
+  this.messageService.add({
+    severity: 'info',
+    summary: 'Restore',
+    detail: `Restore functionality for ${backup.name} is not yet implemented`
+  });
+}
 }

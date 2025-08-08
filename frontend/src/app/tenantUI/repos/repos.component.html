@@ -128,6 +128,7 @@
         </tr>
       </ng-template>
       
+      <!-- Update only the table body template -->
       <ng-template pTemplate="body" let-repo>
         <tr>
           <td>
@@ -139,7 +140,9 @@
           <td>{{getRepoTypeLabel(repo.type)}}</td>
           <td>
             <span>{{repo.server_name || 'Unknown'}}</span>
-            <span class="text-xs text-500 block">({{repo.server_ip || 'No IP'}})</span>
+            <div class="text-xs text-500" *ngIf="repo.server_ip && repo.server_ip !== 'N/A'">
+              ({{repo.server_ip}})
+            </div>
           </td>
           <td>
             <span class="text-overflow-ellipsis" style="max-width: 250px; display: block;">
@@ -154,8 +157,6 @@
             <div class="flex">
               <button pButton pRipple icon="pi pi-eye" class="p-button-rounded p-button-text mr-2"
                       pTooltip="View Details" (click)="showViewRepoDialog(repo)"></button>
-              <button pButton pRipple icon="pi pi-pencil" class="p-button-rounded p-button-text p-button-warning mr-2"
-                      pTooltip="Edit" (click)="showEditRepoDialog(repo)"></button>
               <button pButton pRipple icon="pi pi-trash" class="p-button-rounded p-button-text p-button-danger"
                       pTooltip="Delete" (click)="deleteRepository(repo)"></button>
             </div>

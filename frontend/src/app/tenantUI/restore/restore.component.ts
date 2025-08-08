@@ -11,6 +11,8 @@ import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { DropdownModule } from 'primeng/dropdown';
+import { CalendarModule } from 'primeng/calendar';
+
 import { InputTextModule } from 'primeng/inputtext';
 import { TagModule } from 'primeng/tag';
 import { CardModule } from 'primeng/card';
@@ -18,7 +20,7 @@ import { ToastModule } from 'primeng/toast';
 import { TooltipModule } from 'primeng/tooltip';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ProgressBarModule } from 'primeng/progressbar';
-import { CalendarModule } from 'primeng/calendar';
+
 import { MultiSelectModule } from 'primeng/multiselect';
 import { ChipModule } from 'primeng/chip';
 import { TextareaModule } from 'primeng/textarea';
@@ -107,6 +109,18 @@ export class RestoreComponent implements OnInit {
   // Active restore operations
   activeRestores: any[] = [];
 
+  // File browser properties
+  fileBrowserVisible: boolean = false;
+  currentSnapshotFiles: any[] = [];
+  selectedFiles: any[] = [];
+  loadingFiles: boolean = false;
+  currentPath: string = '/';
+  pathHistory: string[] = ['/'];
+  selectedSnapshotForBrowsing: any = null;
+
+  // File selection properties
+  selectAllFiles: boolean = false;
+  
   constructor(
     private apiService: ApiService,
     private authService: AuthService,
@@ -164,53 +178,148 @@ export class RestoreComponent implements OnInit {
     });
   }
   
-  loadSnapshots() {
-    this.loading = true;
-    this.apiService.get('backrest/snapshots/').subscribe({
-      next: (data) => {
-        this.snapshots = data as any[];
-        this.applyFilters();
-        this.loading = false;
-        console.log('Snapshots loaded:', this.snapshots);
-      },
-      error: (err) => {
-        console.error('Failed to load snapshots:', err);
-        this.messageService.add({
-          severity: 'error',
-          summary: 'Error',
-          detail: 'Failed to load snapshots'
-        });
+loadSnapshots() {
+  this.loading = true;
+  console.log('Loading snapshots...');
+  
+  // First, we need to get all repositories, then load snapshots from each
+  this.loadRepositories();
+  
+  // Load snapshots from all repositories
+  this.loadAllSnapshots();
+}
+
+loadAllSnapshots() {
+  if (this.repositories.length === 0) {
+    // If repositories aren't loaded yet, wait and try again
+    setTimeout(() => {
+      if (this.repositories.length > 0) {
+        this.loadAllSnapshots();
+      } else {
+        console.warn('No repositories found');
         this.loading = false;
       }
-    });
+    }, 1000);
+    return;
   }
-  
-  loadActiveRestores() {
-    this.apiService.get('backrest/operations/?operation_type=restore&status=running').subscribe({
+
+  this.loading = true;
+  const allSnapshots: any[] = [];
+  let loadedRepos = 0;
+
+  this.repositories.forEach((repo: any) => {
+    // Use the correct endpoint format: repos/<repo_id>/snapshots/
+    const repoId = repo.repository_id || repo.id;
+    
+    console.log(`Loading snapshots for repository: ${repoId}`);
+    
+    this.apiService.get(`backrest/repos/${repoId}/snapshots/`).subscribe({
       next: (data) => {
-        this.activeRestores = data as any[];
-        console.log('Active restores:', this.activeRestores);
+        console.log(`Snapshots for repo ${repoId}:`, data);
         
-        // If we have active restores, poll for status updates
-        if (this.activeRestores.length > 0) {
-          this.pollRestoreStatus();
+        // Handle different response formats
+        let repoSnapshots = [];
+        if (Array.isArray(data)) {
+          repoSnapshots = data;
+        } else if (
+          typeof data === 'object' &&
+          data !== null &&
+          'snapshots' in data &&
+          Array.isArray((data as any).snapshots)
+        ) {
+          repoSnapshots = (data as any).snapshots;
+        } else if (
+          typeof data === 'object' &&
+          data !== null &&
+          'results' in data &&
+          Array.isArray((data as any).results)
+        ) {
+          repoSnapshots = (data.results as any[]);
+        }
+        
+        // Add repository info to each snapshot
+        repoSnapshots.forEach((snapshot: any) => {
+          snapshot.repository = repo.id;
+          snapshot.repository_name = repo.name;
+          snapshot.repository_id = repoId;
+        });
+        
+        allSnapshots.push(...repoSnapshots);
+        loadedRepos++;
+        
+        // Check if all repositories have been loaded
+        if (loadedRepos === this.repositories.length) {
+          // Sort by time descending (newest first)
+          allSnapshots.sort((a, b) => {
+            const timeA = new Date(a.time || 0).getTime();
+            const timeB = new Date(b.time || 0).getTime();
+            return timeB - timeA;
+          });
+          
+          this.snapshots = allSnapshots;
+          console.log('All snapshots loaded:', this.snapshots);
+          console.log('Total snapshots:', this.snapshots.length);
+          
+          this.applyFilters();
+          this.loading = false;
         }
       },
       error: (err) => {
+        console.error(`Failed to load snapshots for repo ${repoId}:`, err);
+        loadedRepos++;
+        
+        // Continue even if one repo fails
+        if (loadedRepos === this.repositories.length) {
+          this.snapshots = allSnapshots;
+          console.log('Snapshots loaded (with some errors):', this.snapshots);
+          this.applyFilters();
+          this.loading = false;
+        }
+      }
+    });
+  });
+
+  // Handle case where no repositories exist
+  if (this.repositories.length === 0) {
+    this.snapshots = [];
+    this.filteredSnapshots = [];
+    this.loading = false;
+  }
+}
+  
+  loadActiveRestores() {
+    // Use query parameters to filter for restore operations
+    this.apiService.get('backrest/operations/?type=restore&status=running').subscribe({
+      next: (data: any) => {
+        console.log('Active restores:', data);
+        this.activeRestores = Array.isArray(data) ? data : (data.results || []);
+      },
+      error: (err) => {
         console.error('Failed to load active restores:', err);
+        this.activeRestores = [];
       }
     });
   }
   
   applyFilters() {
+    console.log('Applying filters...');
+    console.log('Filter repository:', this.filterRepository);
+    console.log('Filter plan:', this.filterPlan);
+    console.log('Filter tags:', this.filterTags);
+    console.log('Original snapshots count:', this.snapshots.length);
+    
     this.filteredSnapshots = this.snapshots.filter(snapshot => {
+      console.log('Processing snapshot:', snapshot);
+      
       // Repository filter
       if (this.filterRepository && snapshot.repository !== this.filterRepository.id) {
+        console.log(`Filtered out by repository: ${snapshot.repository} !== ${this.filterRepository.id}`);
         return false;
       }
       
       // Plan filter (if the snapshot has a plan attribute)
       if (this.filterPlan && snapshot.plan !== this.filterPlan.id) {
+        console.log(`Filtered out by plan: ${snapshot.plan} !== ${this.filterPlan.id}`);
         return false;
       }
       
@@ -218,6 +327,7 @@ export class RestoreComponent implements OnInit {
       if (this.filterDateRange && this.filterDateRange.length === 2) {
         const snapshotDate = new Date(snapshot.time);
         if (snapshotDate < this.filterDateRange[0] || snapshotDate > this.filterDateRange[1]) {
+          console.log('Filtered out by date range');
           return false;
         }
       }
@@ -225,15 +335,23 @@ export class RestoreComponent implements OnInit {
       // Tags filter
       if (this.filterTags.length > 0) {
         if (!snapshot.tags || !Array.isArray(snapshot.tags)) {
+          console.log('Filtered out: no tags on snapshot');
           return false;
         }
         
         // Check if snapshot has all the filter tags
-        return this.filterTags.every(tag => snapshot.tags.includes(tag));
+        const hasAllTags = this.filterTags.every(tag => snapshot.tags.includes(tag));
+        if (!hasAllTags) {
+          console.log('Filtered out by tags');
+          return false;
+        }
       }
       
+      console.log('Snapshot passed all filters');
       return true;
     });
+    
+    console.log('Filtered snapshots count:', this.filteredSnapshots.length);
   }
   
   resetFilters() {
@@ -288,6 +406,7 @@ export class RestoreComponent implements OnInit {
     this.restoreOptions.excludePatterns.splice(index, 1);
   }
   
+  // Update the restore method to call the correct API
   initiateRestore() {
     if (!this.selectedSnapshot) {
       this.messageService.add({
@@ -320,9 +439,10 @@ export class RestoreComponent implements OnInit {
         
         console.log('Initiating restore with data:', restoreData);
         
-        this.apiService.post(`backrest/snapshots/${this.selectedSnapshot.id}/restore/`, restoreData).subscribe({
+        // Call the correct restore endpoint - matches your URL pattern
+        this.apiService.post('backrest/restore/', restoreData).subscribe({
           next: (response) => {
-            this.restoreOperationId = (response as any).operation_id;
+            this.restoreOperationId = (response as any).operation_id || (response as any).operationId;
             
             this.messageService.add({
               severity: 'info',
@@ -330,8 +450,10 @@ export class RestoreComponent implements OnInit {
               detail: 'Your restore operation has started. You can track its progress on this page.'
             });
             
-            // Start polling for status
-            this.pollRestoreStatus();
+            // Start polling for status if we have an operation ID
+            if (this.restoreOperationId) {
+              this.pollRestoreStatus();
+            }
             
             // Close the dialog but keep progress visible
             this.restoreDialogVisible = false;
@@ -345,7 +467,7 @@ export class RestoreComponent implements OnInit {
             this.messageService.add({
               severity: 'error',
               summary: 'Restore Failed',
-              detail: err.error?.detail || 'Failed to initiate restore operation'
+              detail: err.error?.detail || err.error?.message || 'Failed to initiate restore operation'
             });
           }
         });
@@ -354,70 +476,50 @@ export class RestoreComponent implements OnInit {
   }
   
   pollRestoreStatus() {
-    // First, sync operations to get latest status
-    this.apiService.post('backrest/operations/sync_operations/', {}).subscribe({
-      next: () => {
-        // Now get active restores again
-        this.apiService.get('backrest/operations/?operation_type=restore').subscribe({
-          next: (data) => {
-            this.activeRestores = data as any[];
-            
-            // Check if our operation is still running
-            if (this.restoreOperationId) {
-              const currentOp = this.activeRestores.find(op => op.operation_id === this.restoreOperationId);
-              
-              if (currentOp) {
-                if (currentOp.status === 'running') {
-                  // Still running, update progress if available
-                  if (currentOp.stats && currentOp.stats.progress) {
-                    this.restoreProgress = currentOp.stats.progress;
-                  }
-                  
-                  // Poll again in 2 seconds
-                  setTimeout(() => this.pollRestoreStatus(), 2000);
-                } else if (currentOp.status === 'completed') {
-                  // Restore completed
-                  this.restoreProgress = 100;
-                  this.restoreInProgress = false;
-                  
-                  this.messageService.add({
-                    severity: 'success',
-                    summary: 'Restore Complete',
-                    detail: 'Your files have been successfully restored.'
-                  });
-                  
-                  // Clear operation ID
-                  this.restoreOperationId = '';
-                } else if (currentOp.status === 'failed') {
-                  // Restore failed
-                  this.restoreInProgress = false;
-                  
-                  this.messageService.add({
-                    severity: 'error',
-                    summary: 'Restore Failed',
-                    detail: currentOp.error || 'The restore operation failed. Please check logs for details.'
-                  });
-                  
-                  // Clear operation ID
-                  this.restoreOperationId = '';
-                }
-              }
+    if (!this.restoreOperationId) return;
+    
+    const checkStatus = () => {
+      // Use the operations endpoint to check status
+      this.apiService.get(`backrest/operations/?operation_id=${this.restoreOperationId}`).subscribe({
+        next: (response: any) => {
+          const operations = Array.isArray(response) ? response : (response.results || []);
+          const operation = operations.find((op: any) => op.operation_id === this.restoreOperationId);
+          
+          if (operation) {
+            if (operation.status === 'running') {
+              this.restoreProgress = operation.progress || 0;
+              setTimeout(checkStatus, 2000); // Check every 2 seconds
+            } else if (operation.status === 'completed') {
+              this.restoreProgress = 100;
+              this.restoreInProgress = false;
+              this.messageService.add({
+                severity: 'success',
+                summary: 'Restore Completed',
+                detail: 'Files have been successfully restored'
+              });
+              this.loadActiveRestores(); // Refresh active restores
+            } else if (operation.status === 'failed') {
+              this.restoreInProgress = false;
+              this.messageService.add({
+                severity: 'error',
+                summary: 'Restore Failed',
+                detail: operation.error || 'Restore operation failed'
+              });
             }
-            
-            // If we have any active restore operations, continue polling
-            const runningRestores = this.activeRestores.filter(op => op.status === 'running');
-            if (runningRestores.length > 0) {
-              setTimeout(() => this.pollRestoreStatus(), 2000);
-            }
-          },
-          error: (err) => {
-            console.error('Failed to load active restores:', err);
-            // Retry polling in case of error
-            setTimeout(() => this.pollRestoreStatus(), 5000);
           }
-        });
-      }
-    });
+        },
+        error: (err) => {
+          console.error('Failed to check restore progress:', err);
+          // Continue checking unless it's a persistent error
+          if (this.restoreInProgress) {
+            setTimeout(checkStatus, 5000); // Check less frequently on error
+          }
+        }
+      });
+    };
+
+    // Start monitoring after a short delay
+    setTimeout(checkStatus, 2000);
   }
   
   formatDate(dateStr: string): string {
@@ -475,4 +577,210 @@ export class RestoreComponent implements OnInit {
       }
     });
   }
+
+  // Add these new methods for file browsing
+  
+  showFileBrowser(snapshot: any) {
+    this.selectedSnapshotForBrowsing = snapshot;
+    this.currentPath = '/';
+    this.pathHistory = ['/'];
+    this.selectedFiles = [];
+    this.fileBrowserVisible = true;
+    this.loadSnapshotFiles('/');
+  }
+
+  loadSnapshotFiles(path: string) {
+    if (!this.selectedSnapshotForBrowsing) return;
+    
+    this.loadingFiles = true;
+    
+    const requestData = {
+      repoId: this.selectedSnapshotForBrowsing.repository_id || this.selectedSnapshotForBrowsing.repository,
+      snapshotId: this.selectedSnapshotForBrowsing.snapshot_id || this.selectedSnapshotForBrowsing.id,
+      path: path
+    };
+
+    console.log('Loading snapshot files with request:', requestData);
+
+    // Use the ViewSet custom action for file listing
+    this.apiService.post('backrest/snapshots/list_files/', requestData).subscribe({
+      next: (response: any) => {
+        console.log('Files response:', response);
+        this.currentSnapshotFiles = this.processFileList(response.entries || []);
+        this.loadingFiles = false;
+      },
+      error: (err) => {
+        console.error('Failed to load snapshot files:', err);
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Failed to load snapshot files'
+        });
+        this.loadingFiles = false;
+      }
+    });
+  }
+
+  processFileList(entries: any[]): any[] {
+    return entries.map(entry => ({
+      ...entry,
+      isDirectory: entry.type === 'dir',
+      isFile: entry.type === 'file',
+      selected: false,
+      displaySize: this.formatBytes(entry.size || 0),
+      displayDate: this.formatDate(entry.mtime || new Date().toISOString())
+    })).sort((a, b) => {
+      // Sort directories first, then files
+      if (a.isDirectory && !b.isDirectory) return -1;
+      if (!a.isDirectory && b.isDirectory) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }
+
+  navigateToDirectory(entry: any) {
+    if (!entry.isDirectory) return;
+    
+    const newPath = this.joinPaths(this.currentPath, entry.name);
+    this.currentPath = newPath;
+    this.pathHistory.push(newPath);
+    this.loadSnapshotFiles(newPath);
+  }
+
+  navigateToPath(path: string) {
+    this.currentPath = path;
+    // Update path history
+    const pathIndex = this.pathHistory.indexOf(path);
+    if (pathIndex !== -1) {
+      this.pathHistory = this.pathHistory.slice(0, pathIndex + 1);
+    } else {
+      this.pathHistory.push(path);
+    }
+    this.loadSnapshotFiles(path);
+  }
+
+  navigateUp() {
+    if (this.currentPath === '/') return;
+    
+    const parentPath = this.getParentPath(this.currentPath);
+    this.navigateToPath(parentPath);
+  }
+
+  getParentPath(path: string): string {
+    if (path === '/') return '/';
+    const parts = path.split('/').filter(p => p);
+    if (parts.length <= 1) return '/';
+    return '/' + parts.slice(0, -1).join('/');
+  }
+
+  joinPaths(basePath: string, fileName: string): string {
+    if (basePath === '/') return '/' + fileName;
+    return basePath + '/' + fileName;
+  }
+
+  getBreadcrumbParts(): string[] {
+    if (this.currentPath === '/') return ['/'];
+    return ['/'].concat(this.currentPath.split('/').filter(p => p));
+  }
+
+  getBreadcrumbPath(index: number): string {
+    const parts = this.getBreadcrumbParts();
+    if (index === 0) return '/';
+    return '/' + parts.slice(1, index + 1).join('/');
+  }
+
+  toggleFileSelection(file: any) {
+    file.selected = !file.selected;
+    this.updateSelectedFiles();
+  }
+
+  toggleSelectAll() {
+    this.selectAllFiles = !this.selectAllFiles;
+    this.currentSnapshotFiles.forEach(file => {
+      file.selected = this.selectAllFiles;
+    });
+    this.updateSelectedFiles();
+  }
+
+  updateSelectedFiles() {
+    // Get all selected files from current view
+    const currentSelected = this.currentSnapshotFiles
+      .filter(file => file.selected)
+      .map(file => ({
+        ...file,
+        fullPath: this.joinPaths(this.currentPath, file.name)
+      }));
+
+    // Remove files from current path from selection
+    this.selectedFiles = this.selectedFiles.filter(
+      selected => !selected.fullPath.startsWith(this.currentPath)
+    );
+
+    // Add currently selected files
+    this.selectedFiles.push(...currentSelected);
+
+    // Update select all checkbox state
+    this.selectAllFiles = this.currentSnapshotFiles.length > 0 && 
+                         this.currentSnapshotFiles.every(file => file.selected);
+  }
+
+  clearFileSelection() {
+    this.selectedFiles = [];
+    this.currentSnapshotFiles.forEach(file => file.selected = false);
+    this.selectAllFiles = false;
+  }
+
+  restoreSelectedFiles() {
+    if (this.selectedFiles.length === 0) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'No Files Selected',
+        detail: 'Please select files to restore'
+      });
+      return;
+    }
+
+    // Prepare restore options with selected files
+    this.restoreOptions = {
+      targetPath: '/home/restored_files', // Default target
+      includePaths: this.selectedFiles.map(file => file.fullPath),
+      excludePatterns: [],
+      overwriteExisting: false,
+      verify: true
+    };
+
+    // Close file browser and show restore dialog
+    this.fileBrowserVisible = false;
+    this.selectedSnapshot = this.selectedSnapshotForBrowsing;
+    this.restoreDialogVisible = true;
+  }
+
+  restoreEntireSnapshot(snapshot: any) {
+    this.selectedSnapshot = snapshot;
+    this.restoreOptions = {
+      targetPath: '/home/restored_files',
+      includePaths: ['/'],
+      excludePatterns: [],
+      overwriteExisting: false,
+      verify: true
+    };
+    this.restoreDialogVisible = true;
+  }
+
+  getFileIcon(entry: any): string {
+    if (entry.isDirectory) return 'pi pi-folder';
+    
+    const ext = entry.name.split('.').pop()?.toLowerCase();
+    switch (ext) {
+      case 'txt': case 'log': case 'md': return 'pi pi-file-text';
+      case 'pdf': return 'pi pi-file-pdf';
+      case 'jpg': case 'jpeg': case 'png': case 'gif': return 'pi pi-image';
+      case 'mp3': case 'wav': case 'flac': return 'pi pi-volume-up';
+      case 'mp4': case 'avi': case 'mkv': return 'pi pi-video';
+      case 'zip': case 'tar': case 'gz': case '7z': return 'pi pi-file-archive';
+      case 'js': case 'ts': case 'html': case 'css': case 'py': case 'java': return 'pi pi-code';
+      default: return 'pi pi-file';
+    }
+  }
+
+
 }
