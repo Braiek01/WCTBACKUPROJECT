@@ -78,9 +78,9 @@
         </a>
       </li>
       <li>
-        <a [routerLink]="['/', tenantName, 'settings']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
-          <i class="pi pi-cog mr-2"></i>
-          <span>Settings</span>
+        <a [routerLink]="['/', tenantName, 'analytics']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-chart-line mr-2"></i>
+          <span>Analytics</span>
         </a>
       </li>
     </ul>
@@ -257,7 +257,7 @@
         <th>Date</th>
         <th>Repository</th>
         <th>Size</th>
-        <th>Files</th>
+
         <th>Tags</th>
         <th style="width: 10rem">Actions</th>
       </tr>
@@ -269,16 +269,13 @@
           <span class="font-monospace text-sm">{{ snapshot.snapshot_id || snapshot.id }}</span>
         </td>
         <td>
-          <span>{{ formatDate(snapshot.time) }}</span>
+          <span>{{ formatDate({unixTimeMs: snapshot.unixTimeMs}) }}</span>
         </td>
         <td>
           <span>{{ getRepositoryName(snapshot.repository) }}</span>
         </td>
         <td>
           <span>{{ getSnapshotSize(snapshot) }}</span>
-        </td>
-        <td>
-          <span>{{ snapshot.file_count || (snapshot.summary && snapshot.summary.totalFileCount) || 'N/A' }}</span>
         </td>
         <td>
           <div class="flex flex-wrap gap-1">

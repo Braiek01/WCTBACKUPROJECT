@@ -31,6 +31,10 @@ urlpatterns = [
     path('cancel/', api_views.cancel_operation, name='cancel_operation'),
     path('logs/fetch/', api_views.fetch_backrest_logs, name='fetch-backrest-logs'),
     path('repos/<str:repo_id>/check', api_views.check_repository, name='check-repository'),
+    path('debug-restore/', api_views.debug_restore, name='debug_restore'),
+    path('dashboard-stats/', api_views.dashboard_stats, name='dashboard_stats'),
+    path('live-activity/', api_views.live_activity, name='live_activity'),
+
     
   
 ]

@@ -296,7 +296,15 @@ class BackrestClient:
             "snapshotId": snapshot_id,
             "path": path
         }
-        return self._make_request("ListSnapshotFiles", data=data)
+        
+        try:
+            return self._make_request("ListSnapshotFiles", data=data)
+        except Exception as e:
+            logger.error(f"Error listing snapshot files: {str(e)}")
+            # Return empty structure if API call fails
+            return {
+                "entries": []
+            }
     
     def restore_snapshot(self, repo_id, snapshot_id, path="/", target="", plan_id=""):
         """

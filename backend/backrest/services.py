@@ -29,21 +29,41 @@ class BackrestService:
         if hasattr(self, 'token') and self.token and auth_required:
             headers['Authorization'] = f"Bearer {self.token}"
         
+        # ENHANCED LOGGING: Log the exact data being sent
+        if data:
+            logger.info(f"Request data type: {type(data)}")
+            logger.info(f"Full request payload: {json.dumps(data, indent=2)}")
+            
+            # CRITICAL DEBUG: Check if repo field is empty
+            if isinstance(data, dict) and 'repo' in data:
+                logger.info(f"REPO FIELD VALUE: '{data['repo']}' (type: {type(data['repo'])}, length: {len(str(data['repo']))})")
+                if not data['repo'] or str(data['repo']).strip() == "":
+                    logger.error("❌ REPO FIELD IS EMPTY! This is the source of the error!")
+            else:
+                logger.info("No 'repo' field found in data")
+        
         try:
             if method.lower() == 'get':
                 response = requests.get(url, headers=headers, timeout=30)
             elif method.lower() == 'post':
-                # Log exact payload being sent
-                logger.info(f"Request payload: {json.dumps(data)[:1000]}...")  # Limit for logs
+                # Log the exact JSON string being sent
+                json_payload = json.dumps(data) if data else "{}"
+                logger.info(f"Exact JSON being sent: {json_payload}")
+                
                 response = requests.post(url, json=data, headers=headers, timeout=30)
             else:
                 raise ValueError(f"Unsupported HTTP method: {method}")
             
             # Log response details regardless of status
             logger.info(f"Response status: {response.status_code}")
+            logger.info(f"Response headers: {dict(response.headers)}")
             
             if response.status_code >= 400:
                 logger.error(f"Error response body: {response.text}")
+            else:
+                # Log successful response (truncated)
+                response_text = response.text[:500] + "..." if len(response.text) > 500 else response.text
+                logger.info(f"Success response: {response_text}")
             
             response.raise_for_status()
             return response.json()
@@ -686,22 +706,26 @@ class BackrestService:
             }
     
     def list_snapshot_files(self, repo_id, snapshot_id, path='/'):
-        """List files in a snapshot at a specific path"""
+        """List files in a snapshot with proper error handling"""
+        logger.info(f"Listing files for repo: {repo_id}, snapshot: {snapshot_id}, path: {path}")
+        
+        if not repo_id or not snapshot_id:
+            raise ValueError("Both repo_id and snapshot_id are required")
+        
+        endpoint = "/v1.Backrest/ListSnapshotFiles"
+        
+        # FIXED: Proper request format for Backrest API
+        request_data = {
+            "repoId": repo_id,  # Make sure this is the string repo ID like "testing"
+            "snapshotId": snapshot_id,
+            "path": path
+        }
+        
+        logger.info(f"Calling {endpoint} with data: {request_data}")
+        
         try:
-            request_data = {
-                "repo": repo_id,
-                "snapshotId": snapshot_id,
-                "path": path
-            }
-            
-            response = self._make_request(
-                'post', 
-                '/v1.Backrest/ListSnapshotFiles', 
-                request_data
-            )
-            
+            response = self._make_request('post', endpoint, request_data)
             return response
-            
         except Exception as e:
             logger.error(f"Failed to list snapshot files: {str(e)}")
             raise

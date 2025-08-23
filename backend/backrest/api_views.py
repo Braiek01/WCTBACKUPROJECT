@@ -10,7 +10,7 @@ from django.core.exceptions import PermissionDenied
 from accounts.api_views import IsTenantAdminOrOwner
 from .models import (
     SSHKey, Server, BackrestRepository, 
-    BackrestPlan, BackrestOperation, BackrestSnapshot, BackrestLog, BackrestInstance
+    BackrestPlan, BackrestOperation, BackrestSnapshot, BackrestLog, BackrestInstance, SystemOperation
 )
 from .serializers import (
     SSHKeySerializer, ServerSerializer, BackrestRepositorySerializer,
@@ -1243,6 +1243,9 @@ class BackrestOperationViewSet(viewsets.ReadOnlyModelViewSet):
             elif "index snapshots" in raw_logger:
                 op_type = "index"
                 context_key = f"index:{repo_name}:{timestamp.strftime('%Y-%m-%d %H:%M')}"
+            elif "restore snapshot" in raw_logger or "restore operation" in raw_logger:
+                op_type = "restore"
+                context_key = f"restore:{repo_name}:{timestamp.strftime('%Y-%m-%d %H:%M')}"
             elif "collect garbage" in raw_logger:
                 op_type = "maintenance"
                 context_key = f"maintenance:{timestamp.strftime('%Y-%m-%d %H:%M')}"
@@ -1934,13 +1937,92 @@ class BackrestSnapshotViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return BackrestSnapshot.objects.filter(tenant=self.request.tenant)
     
-    @action(detail=True, methods=['post'])
-    def restore(self, request, pk=None):
-        """Initiate restore from a snapshot"""
-        snapshot = self.get_object()
-        # Implement restore logic
-        return Response({"status": "restore initiated"})
-    
+    # In BackrestSnapshotViewSet class, replace the restore method:
+    @action(detail=False, methods=['post'])
+    def restore(self, request):
+        """Initiate a restore operation with correct Backrest API format"""
+        snapshot_id = request.data.get('snapshot_id')
+        repository_id = request.data.get('repository_id')
+        target_path = request.data.get('target_path')
+        include_paths = request.data.get('include_paths', ['/'])
+        exclude_patterns = request.data.get('exclude_patterns', [])
+        
+        if not all([snapshot_id, repository_id, target_path]):
+            return Response({
+                "error": "snapshot_id, repository_id, and target_path are required"
+            }, status=400)
+        
+        try:
+            # Find repository
+            repository = BackrestRepository.objects.get(
+                repository_id=repository_id,
+                tenant=request.tenant
+            )
+            
+            # Ensure repository ID is valid
+            backrest_repo_id = repository.repository_id
+            if not backrest_repo_id or backrest_repo_id.strip() == "":
+                backrest_repo_id = repository.name.replace(" ", "_").lower()
+                repository.repository_id = backrest_repo_id
+                repository.save()
+            
+            backrest_service = BackrestService(repository.server)
+            
+            # FIXED: Use correct Backrest API format with "value" wrapper
+            restore_request = {
+                "value": {
+                    "repo": backrest_repo_id,
+                    "snapshotId": snapshot_id,
+                    "path": "/",
+                    "target": target_path,
+                    "includePaths": include_paths,
+                    "excludePatterns": exclude_patterns
+                }
+            }
+            
+            logger.info(f"Calling Backrest restore with: {json.dumps(restore_request, indent=2)}")
+            
+            response = backrest_service._make_request(
+                'POST',
+                '/v1.Backrest/Restore',
+                restore_request
+            )
+            
+            # Create operation record
+            operation = BackrestOperation.objects.create(
+                tenant=request.tenant,
+                repository=repository,
+                operation_type="restore",
+                operation_id=response.get('operationId') or f"restore_{int(time.time())}",
+                status="running",
+                started_at=timezone.now(),
+                stats={
+                    'snapshot_id': snapshot_id,
+                    'target_path': target_path,
+                    'include_paths': include_paths
+                }
+            )
+            
+            return Response({
+                'status': 'success',
+                'message': 'Restore operation started',
+                'operation_id': operation.operation_id,
+                'backrest_response': response
+            })
+            
+        except BackrestRepository.DoesNotExist:
+            return Response({
+                "error": f"Repository not found: {repository_id}"
+            }, status=404)
+        except Exception as e:
+            logger.error(f"Failed to initiate restore: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'status': 'error',
+                'message': str(e)
+            }, status=500)
+        
     @action(detail=True, methods=['get'])
     def test_backrest_connection(self, request, pk=None):
         """Test connection to Backrest server"""
@@ -2238,26 +2320,16 @@ class BackrestSnapshotViewSet(viewsets.ReadOnlyModelViewSet):
             }, status=400)
         
         try:
-            # Find the repository
+            # FIXED: Always lookup by repository_id field (the Backrest repo ID string)
             repository = BackrestRepository.objects.get(
-                repository_id=repo_id,
+                repository_id=repo_id,  # This is the string field like "testing"
                 tenant=request.tenant
             )
             
             backrest_service = BackrestService(repository.server)
             
             # Call Backrest API to list files
-            list_request = {
-                "repo": repo_id,
-                "snapshotId": snapshot_id,
-                "path": path
-            }
-            
-            response = backrest_service._make_request(
-                'post',
-                '/v1.Backrest/ListSnapshotFiles',
-                list_request
-            )
+            response = backrest_service.list_snapshot_files(repo_id, snapshot_id, path)
             
             return Response({
                 'status': 'success',
@@ -2267,14 +2339,18 @@ class BackrestSnapshotViewSet(viewsets.ReadOnlyModelViewSet):
             
         except BackrestRepository.DoesNotExist:
             return Response({
-                "error": "Repository not found"
+                "error": f"Repository not found with repository_id: {repo_id}",
+                "available_repositories": list(
+                    BackrestRepository.objects.filter(tenant=request.tenant)
+                    .values('id', 'repository_id', 'name')
+                )
             }, status=404)
         except Exception as e:
             logger.error(f"Failed to list snapshot files: {str(e)}")
             return Response({
                 'status': 'error',
                 'message': str(e)
-            }, status=500)   
+            }, status=500)
         
     @action(detail=False, methods=['get'])
     def snapshots(self, request):
@@ -2311,79 +2387,7 @@ class BackrestSnapshotViewSet(viewsets.ReadOnlyModelViewSet):
             return Response([], status=500)
 
 
-    @action(detail=False, methods=['post'])
-    def restore(self, request):
-        """Initiate a restore operation"""
-        snapshot_id = request.data.get('snapshot_id')
-        repository_id = request.data.get('repository_id')
-        target_path = request.data.get('target_path')
-        include_paths = request.data.get('include_paths', ['/'])
-        exclude_patterns = request.data.get('exclude_patterns', [])
-        overwrite = request.data.get('overwrite_existing', False)
-        verify = request.data.get('verify', True)
-        
-        if not all([snapshot_id, repository_id, target_path]):
-            return Response({
-                "error": "snapshot_id, repository_id, and target_path are required"
-            }, status=400)
-        
-        try:
-            # Find the repository
-            repository = BackrestRepository.objects.get(
-                id=repository_id,
-                tenant=request.tenant
-            )
-            
-            backrest_service = BackrestService(repository.server)
-            
-            # Call Backrest API to initiate restore
-            restore_request = {
-                "repo": repository.repository_id,
-                "snapshotId": snapshot_id,
-                "target": target_path,
-                "includePaths": include_paths,
-                "excludePatterns": exclude_patterns,
-                "overwrite": overwrite,
-                "verify": verify
-            }
-            
-            response = backrest_service._make_request(
-                'post',
-                '/v1.Backrest/Restore',
-                restore_request
-            )
-            
-            # Create operation record
-            operation = BackrestOperation.objects.create(
-                tenant=request.tenant,
-                repository=repository,
-                operation_type="restore",
-                operation_id=response.get('operationId', f"restore_{int(time.time())}"),
-                status="running",
-                started_at=timezone.now(),
-                stats={
-                    'snapshot_id': snapshot_id,
-                    'target_path': target_path,
-                    'include_paths': include_paths
-                }
-            )
-            
-            return Response({
-                'status': 'success',
-                'message': 'Restore operation started',
-                'operation_id': operation.operation_id
-            })
-            
-        except BackrestRepository.DoesNotExist:
-            return Response({
-                "error": "Repository not found"
-            }, status=404)
-        except Exception as e:
-            logger.error(f"Failed to initiate restore: {str(e)}")
-            return Response({
-                'status': 'error',
-                'message': str(e)
-            }, status=500) 
+   
 
 
     
@@ -2925,7 +2929,7 @@ def get_ssh_client_for_server(server):
     os.unlink(key_path)
     return client
 
-# backend/backrest/api_views.py
+
 import json
 from django.http import JsonResponse
 from rest_framework.decorators import api_view, permission_classes
@@ -3072,34 +3076,118 @@ def list_snapshots(request, repo_id):
             "message": str(e)
         }, status=500)
 
+# Update the restore_snapshot function with better debugging:
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def restore_snapshot(request):
-    """Restore files from a snapshot"""
+    """Restore files from a snapshot with correct Backrest API format"""
     try:
-        data = json.loads(request.body)
-        repo_id = data.get("repo_id")
-        snapshot_id = data.get("snapshot_id")
-        path = data.get("path", "/")
-        target = data.get("target", "")
+        # Extract data from request
+        snapshot_id = request.data.get('snapshot_id')
+        repository_id = request.data.get('repository_id')
+        target_path = request.data.get('target_path')
+        include_paths = request.data.get('include_paths', ['/'])
+        exclude_patterns = request.data.get('exclude_patterns', [])
         
-        if not repo_id or not snapshot_id:
+        logger.info(f"=== RESTORE REQUEST RECEIVED ===")
+        logger.info(f"snapshot_id: '{snapshot_id}'")
+        logger.info(f"repository_id from frontend: '{repository_id}'")
+        logger.info(f"target_path: '{target_path}'")
+        logger.info(f"include_paths: {include_paths}")
+        logger.info(f"exclude_patterns: {exclude_patterns}")
+        
+        if not all([snapshot_id, repository_id, target_path]):
             return JsonResponse({
                 "status": "error",
-                "message": "Missing required parameters: repo_id and snapshot_id"
+                "message": f"Missing required fields"
             }, status=400)
         
-        # Get client for this specific repository's server
-        client, repo = get_client_for_repo(repo_id, request.tenant)
-        result = client.restore_snapshot(repo_id, snapshot_id, path, target)
+        # Find the repository
+        try:
+            repository = BackrestRepository.objects.get(
+                repository_id=repository_id,
+                tenant=request.tenant
+            )
+        except BackrestRepository.DoesNotExist:
+            # Try by database ID as fallback
+            try:
+                repository = BackrestRepository.objects.get(
+                    id=repository_id,
+                    tenant=request.tenant
+                )
+            except BackrestRepository.DoesNotExist:
+                return JsonResponse({
+                    "status": "error",
+                    "message": f"Repository not found: {repository_id}"
+                }, status=404)
+        
+        # Get the correct repository ID for Backrest
+        backrest_repo_id = repository.repository_id
+        if not backrest_repo_id or backrest_repo_id.strip() == "":
+            # Generate from name if empty
+            backrest_repo_id = repository.name.replace(" ", "_").lower()
+            repository.repository_id = backrest_repo_id
+            repository.save()
+            logger.info(f"Updated repository_id to: {backrest_repo_id}")
+        
+        logger.info(f"Using repository ID: '{backrest_repo_id}'")
+        
+        # Create Backrest service
+        backrest_service = BackrestService(repository.server)
+        
+        # CRITICAL FIX: Use the correct Backrest API format
+        # Based on the Go service file, this should be a RestoreSnapshotRequest
+        restore_request = {
+            "value": {  # Wrap in "value" field like other Backrest APIs
+                "repo": backrest_repo_id,
+                "snapshotId": str(snapshot_id),
+                "path": "/",  # Source path in snapshot
+                "target": str(target_path),  # Where to restore to
+                "includePaths": include_paths,
+                "excludePatterns": exclude_patterns
+            }
+        }
+        
+        logger.info(f"=== CALLING BACKREST API ===")
+        logger.info(f"URL: {backrest_service.base_url}/v1.Backrest/Restore")
+        logger.info(f"Payload: {json.dumps(restore_request, indent=2)}")
+        
+        # Call the Backrest API with correct format
+        response = backrest_service._make_request(
+            'POST',
+            '/v1.Backrest/Restore',
+            restore_request
+        )
+        
+        logger.info(f"✓ Backrest restore response: {response}")
+        
+        # Create operation record
+        operation = BackrestOperation.objects.create(
+            tenant=request.tenant,
+            repository=repository,
+            operation_type="restore",
+            operation_id=response.get('operationId') or f"restore_{int(time.time())}",
+            status="running",
+            started_at=timezone.now(),
+            stats={
+                'snapshot_id': snapshot_id,
+                'target_path': target_path,
+                'include_paths': include_paths
+            }
+        )
+        
         return JsonResponse({
-            "status": "success",
-            "message": "Restore operation triggered",
-            "result": result
+            'status': 'success',
+            'message': 'Restore operation started',
+            'operation_id': operation.operation_id,
+            'backrest_response': response
         })
         
     except Exception as e:
-        logger.error(f"Error restoring snapshot: {str(e)}")
+        logger.error(f"❌ RESTORE ERROR: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return JsonResponse({
             "status": "error", 
             "message": str(e)
@@ -3434,3 +3522,192 @@ def check_repository(request, repo_id):
             'status': 'error',
             'message': f'Failed to check repository integrity: {str(e)}',
         }, status=500)
+    
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def debug_restore(request):
+    """Debug version of restore to see what's going wrong"""
+    try:
+        data = request.data
+        logger.info(f"=== DEBUG RESTORE REQUEST ===")
+        logger.info(f"Raw request data: {data}")
+        
+        # Check all repositories
+        all_repos = BackrestRepository.objects.filter(tenant=request.tenant)
+        logger.info(f"Available repositories:")
+        for repo in all_repos:
+            logger.info(f"  ID: {repo.id}, Name: '{repo.name}', repository_id: '{repo.repository_id}'")
+        
+        # Try to find repository
+        repository_id = data.get('repository_id')
+        logger.info(f"Looking for repository with ID: '{repository_id}'")
+        
+        repository = None
+        
+        # Try multiple lookup methods
+        try:
+            repository = BackrestRepository.objects.get(repository_id=repository_id, tenant=request.tenant)
+            logger.info(f"Found by repository_id: {repository.name}")
+        except BackrestRepository.DoesNotExist:
+            try:
+                repository = BackrestRepository.objects.get(id=repository_id, tenant=request.tenant)
+                logger.info(f"Found by database ID: {repository.name}")
+            except (BackrestRepository.DoesNotExist, ValueError):
+                logger.error(f"Repository not found with either method")
+                return JsonResponse({"error": "Repository not found", "available": [
+                    {"id": r.id, "name": r.name, "repository_id": r.repository_id} for r in all_repos
+                ]}, status=404)
+        
+        # Check the repository_id field
+        backrest_repo_id = repository.repository_id
+        logger.info(f"Repository found: {repository.name}")
+        logger.info(f"repository_id field: '{backrest_repo_id}' (type: {type(backrest_repo_id)}, length: {len(str(backrest_repo_id))})")
+        
+        if not backrest_repo_id or backrest_repo_id.strip() == "":
+            logger.error(f"repository_id field is EMPTY!")
+            # Try to fix it
+            backrest_repo_id = "testing"  # Hardcode for testing
+            repository.repository_id = backrest_repo_id
+            repository.save()
+            logger.info(f"Fixed repository_id to: '{backrest_repo_id}'")
+        
+        # Create the restore request
+        restore_request = {
+            "value": {
+                "repo": backrest_repo_id,
+                "snapshotId": data.get('snapshot_id'),
+                "path": "/",
+                "target": data.get('target_path'),
+                "includePaths": data.get('include_paths', ['/']),
+                "excludePatterns": data.get('exclude_patterns', [])
+            }
+        }
+        
+        logger.info(f"Final restore request: {json.dumps(restore_request, indent=2)}")
+        logger.info(f"repo field: '{restore_request['value']['repo']}'")
+        logger.info(f"repo field length: {len(restore_request['value']['repo'])}")
+        logger.info(f"repo field is empty: {not restore_request['value']['repo'] or restore_request['value']['repo'].strip() == ''}")
+        
+        # Make the API call
+        backrest_service = BackrestService(repository.server)
+        response = backrest_service._make_request('POST', '/v1.Backrest/Restore', restore_request)
+        
+        return JsonResponse({
+            "status": "success",
+            "message": "Restore started successfully",
+            "response": response
+        })
+        
+    except Exception as e:
+        logger.error(f"Debug restore error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({"error": str(e)}, status=500)
+    
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def dashboard_stats(request):
+    """Get real dashboard statistics"""
+    try:
+        # Get recent operations
+        operations = BackrestOperation.objects.filter(
+            tenant=request.tenant,
+            started_at__gte=timezone.now() - timedelta(days=30)
+        )
+        
+        # Get backup stats
+        backup_operations = operations.filter(operation_type='backup')
+        
+        stats = {
+            'total_operations': operations.count(),
+            'by_status': {
+                'completed': operations.filter(status='completed').count(),
+                'running': operations.filter(status='running').count(),
+                'failed': operations.filter(status='failed').count(),
+            },
+            'by_type': {
+                'backup': backup_operations.count(),
+                'restore': operations.filter(operation_type='restore').count(),
+                'maintenance': operations.filter(operation_type__in=['prune', 'check']).count(),
+            },
+            'recent_backups': []
+        }
+        
+        # Get recent backup data
+        recent_backups = backup_operations.order_by('-started_at')[:5]
+        for backup in recent_backups:
+            stats['recent_backups'].append({
+                'id': backup.operation_id,
+                'repository': backup.repository.name if backup.repository else 'Unknown',
+                'plan': backup.plan.name if backup.plan else 'Manual',
+                'status': backup.status,
+                'started_at': backup.started_at,
+                'completed_at': backup.completed_at,
+                'size': backup.stats.get('total_bytes_processed', 0) if backup.stats else 0
+            })
+        
+        return JsonResponse(stats)
+        
+    except Exception as e:
+        logger.error(f"Dashboard stats error: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def live_activity(request):
+    """Get live activity feed combining system operations and backrest operations"""
+    try:
+        limit = int(request.GET.get('limit', 10))
+        
+        # Get system operations
+        system_ops = SystemOperation.objects.filter(
+            tenant=request.tenant
+        ).order_by('-started_at')[:limit]
+        
+        # Get recent backrest operations  
+        backrest_ops = BackrestOperation.objects.filter(
+            tenant=request.tenant
+        ).order_by('-started_at')[:limit]
+        
+        activities = []
+        
+        # Process system operations
+        for op in system_ops:
+            activities.append({
+                'id': f'sys_{op.id}',
+                'type': op.operation_type,
+                'status': op.status,
+                'description': op.description,
+                'user': op.user,
+                'timestamp': op.started_at,
+                'repository': op.repository.name if op.repository else None,
+                'plan': op.plan.name if op.plan else None,
+                'source': 'system'
+            })
+        
+        # Process backrest operations
+        for op in backrest_ops:
+            activities.append({
+                'id': f'br_{op.id}',
+                'type': op.operation_type,
+                'status': op.status,
+                'description': f'{op.operation_type.title()} {op.status} for {op.repository.name if op.repository else "Unknown"}',
+                'user': 'System',
+                'timestamp': op.started_at,
+                'repository': op.repository.name if op.repository else None,
+                'plan': op.plan.name if op.plan else None,
+                'source': 'backrest'
+            })
+        
+        # Sort by timestamp and limit
+        activities.sort(key=lambda x: x['timestamp'], reverse=True)
+        activities = activities[:limit]
+        
+        return JsonResponse({
+            'results': activities,
+            'count': len(activities)
+        })
+        
+    except Exception as e:
+        logger.error(f"Live activity error: {e}")
+        return JsonResponse({'error': str(e)}, status=500)

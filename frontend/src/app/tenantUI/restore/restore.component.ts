@@ -409,68 +409,38 @@ loadAllSnapshots() {
   // Update the restore method to call the correct API
   initiateRestore() {
     if (!this.selectedSnapshot) {
-      this.messageService.add({
-        severity: 'error',
-        summary: 'Error',
-        detail: 'No snapshot selected'
-      });
+      this.messageService.add({severity: 'error', summary: 'Error', detail: 'No snapshot selected'});
       return;
     }
-    
-    this.confirmationService.confirm({
-      message: `Are you sure you want to restore from snapshot "${this.selectedSnapshot.snapshot_id || this.selectedSnapshot.id}"? This may overwrite existing files at the target location.`,
-      accept: () => {
-        this.restoreInProgress = true;
-        this.restoreProgress = 0;
-        
-        // Clean up includePaths and excludePatterns
-        const includePaths = this.restoreOptions.includePaths.filter((path: string) => path.trim() !== '');
-        const excludePatterns = this.restoreOptions.excludePatterns.filter((pattern: string) => pattern.trim() !== '');
-        
-        const restoreData = {
-          snapshot_id: this.selectedSnapshot.snapshot_id || this.selectedSnapshot.id,
-          repository_id: this.selectedSnapshot.repository_id || this.selectedSnapshot.repository,
-          target_path: this.restoreOptions.targetPath,
-          include_paths: includePaths.length > 0 ? includePaths : ['/'],
-          exclude_patterns: excludePatterns,
-          overwrite_existing: this.restoreOptions.overwriteExisting,
-          verify: this.restoreOptions.verify
-        };
-        
-        console.log('Initiating restore with data:', restoreData);
-        
-        // Call the correct restore endpoint - matches your URL pattern
-        this.apiService.post('backrest/restore/', restoreData).subscribe({
-          next: (response) => {
-            this.restoreOperationId = (response as any).operation_id || (response as any).operationId;
-            
-            this.messageService.add({
-              severity: 'info',
-              summary: 'Restore Initiated',
-              detail: 'Your restore operation has started. You can track its progress on this page.'
-            });
-            
-            // Start polling for status if we have an operation ID
-            if (this.restoreOperationId) {
-              this.pollRestoreStatus();
-            }
-            
-            // Close the dialog but keep progress visible
-            this.restoreDialogVisible = false;
-            
-            // Reload active restores
-            this.loadActiveRestores();
-          },
-          error: (err) => {
-            this.restoreInProgress = false;
-            console.error('Failed to initiate restore:', err);
-            this.messageService.add({
-              severity: 'error',
-              summary: 'Restore Failed',
-              detail: err.error?.detail || err.error?.message || 'Failed to initiate restore operation'
-            });
-          }
-        });
+
+    this.restoreInProgress = true;
+    this.restoreProgress = 0;
+
+    const restoreData = {
+      snapshot_id: this.selectedSnapshot.id,
+      // FIX: Make sure we're sending the correct repository_id (string field)
+      repository_id: this.selectedSnapshot.repository_id, // Use repository_id not repository
+      target_path: this.restoreOptions.targetPath,
+      include_paths: this.restoreOptions.includePaths,
+      exclude_patterns: this.restoreOptions.excludePatterns,
+      overwrite_existing: this.restoreOptions.overwriteExisting,
+      verify: this.restoreOptions.verify
+    };
+
+    console.log('Restore data being sent:', restoreData); // Debug log
+
+    this.apiService.post('backrest/snapshots/restore/', restoreData).subscribe({
+      next: (response) => {
+        this.messageService.add({severity: 'success', summary: 'Success', detail: 'Restore operation started'});
+        const resp = response as { operation_id: string };
+        this.restoreOperationId = resp.operation_id;
+        this.pollRestoreStatus();
+        this.restoreDialogVisible = false;
+      },
+      error: (error) => {
+        console.error('Restore error:', error);
+        this.restoreInProgress = false;
+        this.messageService.add({severity: 'error', summary: 'Restore Failed', detail: error.error?.message || 'Unknown error occurred'});
       }
     });
   }
@@ -521,12 +491,77 @@ loadAllSnapshots() {
     // Start monitoring after a short delay
     setTimeout(checkStatus, 2000);
   }
+  getSnapshotSize(snapshot: any): string {
+  let size = 0;
   
-  formatDate(dateStr: string): string {
-    const date = new Date(dateStr);
-    return date.toLocaleString();
+  // Try different possible size fields - update based on your actual data structure
+  if (snapshot.summary?.dataAdded) {
+    size = parseInt(snapshot.summary.dataAdded);
+  } else if (snapshot.summary?.totalBytesProcessed) {
+    size = parseInt(snapshot.summary.totalBytesProcessed);
+  } else if (snapshot.summary?.totalSize) {
+    size = snapshot.summary.totalSize;
+  } else if (snapshot.summary?.total_size) {
+    size = snapshot.summary.total_size;
+  } else if (snapshot.size_bytes) {
+    size = snapshot.size_bytes;
+  } else if (snapshot.size) {
+    size = snapshot.size;
   }
   
+  return size > 0 ? this.formatBytes(size) : 'N/A';
+}
+getSnapshotFileCount(snapshot: any): string {
+  // Try different possible file count fields based on your data structure
+  if (snapshot.summary?.totalFilesProcessed) {
+    return snapshot.summary.totalFilesProcessed.toString();
+  } else if (snapshot.summary?.filesNew) {
+    const filesNew = parseInt(snapshot.summary.filesNew) || 0;
+    const filesUnmodified = parseInt(snapshot.summary.filesUnmodified) || 0;
+    return (filesNew + filesUnmodified).toString();
+  } else if (snapshot.summary?.totalFileCount) {
+    return snapshot.summary.totalFileCount.toString();
+  } else if (snapshot.summary?.total_file_count) {
+    return snapshot.summary.total_file_count.toString();
+  } else if (snapshot.file_count) {
+    return snapshot.file_count.toString();
+  }
+  return 'N/A';
+}
+
+formatDate(dateStr: string | Date | any): string {
+  if (!dateStr) return 'Invalid Date';
+  
+  try {
+    let date: Date;
+    
+    // Handle different date formats
+    if (typeof dateStr === 'object' && dateStr.unixTimeMs) {
+      // If it's a snapshot object with unixTimeMs
+      date = new Date(parseInt(dateStr.unixTimeMs));
+    } else if (typeof dateStr === 'string' && dateStr.match(/^\d+$/)) {
+      // If it's a string of numbers (timestamp)
+      date = new Date(parseInt(dateStr));
+    } else {
+      // Regular date string or Date object
+      date = new Date(dateStr);
+    }
+    
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  } catch (error) {
+    return 'Invalid Date';
+  }
+}
+
   formatBytes(bytes: number): string {
     if (bytes === 0) return '0 Bytes';
     
@@ -536,21 +571,6 @@ loadAllSnapshots() {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  }
-  
-  getSnapshotSize(snapshot: any): string {
-    let size = 0;
-    
-    // Try to extract size from different properties based on your data structure
-    if (snapshot.summary && snapshot.summary.totalSize) {
-      size = snapshot.summary.totalSize;
-    } else if (snapshot.size_bytes) {
-      size = snapshot.size_bytes;
-    } else if (snapshot.size) {
-      size = snapshot.size;
-    }
-    
-    return this.formatBytes(size);
   }
   
   getRepositoryName(repoId: number): string {
@@ -590,31 +610,61 @@ loadAllSnapshots() {
   }
 
   loadSnapshotFiles(path: string) {
-    if (!this.selectedSnapshotForBrowsing) return;
+    if (!this.selectedSnapshotForBrowsing) {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'No snapshot selected for browsing'
+      });
+      return;
+    }
     
     this.loadingFiles = true;
     
+    // FIXED: Make sure we're using the correct repository_id
+    const repoId = this.selectedSnapshotForBrowsing.repository_id; // This should be the string like "testing"
+    const snapshotId = this.selectedSnapshotForBrowsing.snapshot_id || this.selectedSnapshotForBrowsing.id;
+    
+    console.log('Loading files with:', {
+      repoId: repoId,
+      snapshotId: snapshotId,
+      path: path
+    });
+    
+    // Make sure we have the required data
+    if (!repoId || !snapshotId) {
+      console.error('Missing required data:', {
+        repoId: repoId,
+        snapshotId: snapshotId,
+        snapshot: this.selectedSnapshotForBrowsing
+      });
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Missing repository or snapshot information'
+      });
+      this.loadingFiles = false;
+      return;
+    }
+    
     const requestData = {
-      repoId: this.selectedSnapshotForBrowsing.repository_id || this.selectedSnapshotForBrowsing.repository,
-      snapshotId: this.selectedSnapshotForBrowsing.snapshot_id || this.selectedSnapshotForBrowsing.id,
+      repoId: repoId,
+      snapshotId: snapshotId,
       path: path
     };
-
-    console.log('Loading snapshot files with request:', requestData);
-
-    // Use the ViewSet custom action for file listing
+    
     this.apiService.post('backrest/snapshots/list_files/', requestData).subscribe({
       next: (response: any) => {
-        console.log('Files response:', response);
+        console.log('Files loaded successfully:', response);
         this.currentSnapshotFiles = this.processFileList(response.entries || []);
         this.loadingFiles = false;
       },
-      error: (err) => {
-        console.error('Failed to load snapshot files:', err);
+      error: (error) => {
+        console.error('Failed to load snapshot files:', error);
         this.messageService.add({
           severity: 'error',
           summary: 'Error',
-          detail: 'Failed to load snapshot files'
+          detail: 'Failed to load snapshot files: ' + (error.error?.message || error.message)
         });
         this.loadingFiles = false;
       }

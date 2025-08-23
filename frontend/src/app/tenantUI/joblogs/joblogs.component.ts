@@ -581,6 +581,8 @@ private generateOperationMessage(op: any): string {
       return `Repository check for ${op.repository || 'unknown'}`;
     case 'prune':
       return `Prune operation for repository ${op.repository || 'unknown'}`;
+    case 'restore':
+      return `Restore operation - ${op.snapshotId ? 'Snapshot: ' + op.snapshotId.substring(0, 8) + '...' : 'Unknown snapshot'}`;
     default:
       return op.message || `${op.type || 'Unknown'} operation`;
   }
@@ -919,7 +921,57 @@ processSnapshotsIntoOperations(snapshots: any[]): any[] {
       });
     }
     
-    // 4. RUNNING TASK operations (for backup, restore, etc.)
+    // 4. RESTORE operations
+    else if (logMessage.includes('restore snapshot') || 
+         logMessage.includes('restore operation') || 
+         logMessage.includes('restore complete') ||
+         loggerName.includes('restore')) {
+  const operationId = `restore-${timestamp.getTime()}-${Math.random().toString(36).substr(2, 5)}`;
+  
+  // Extract snapshot ID from the message
+  let snapshotId = 'Unknown';
+  const snapshotMatch = logMessage.match(/snapshot[:\s]+["']?([a-fA-F0-9]{8,64})["']?/);
+  if (snapshotMatch) {
+    snapshotId = snapshotMatch[1];
+  }
+  
+  // Extract target path from the message
+  let targetPath = 'Unknown';
+  const pathMatch = logMessage.match(/target[:\s]+["']?([^"'\s]+)["']?/);
+  if (pathMatch) {
+    targetPath = pathMatch[1];
+  }
+  
+  // Extract repository name from the message
+  let repoName = 'Unknown';
+  const repoMatch = logMessage.match(/repo[:\s]+["']([^"']+)["']/);
+  if (repoMatch) {
+    repoName = repoMatch[1];
+  }
+  
+  operations.push({
+    id: operationId,
+    type: 'restore',
+    startTime: timestamp,
+    endTime: timestamp,
+    duration: 0,
+    status: this.determineStatusFromLogLevel(log.level),
+    repository: repoName,
+    repository_name: repoName,
+    hostname: serverName,
+    server_name: serverName,
+    plan: 'N/A',
+    message: logMessage,
+    level: log.level,
+    error: log.error || null,
+    isRawLogOperation: true,
+    // Additional restore-specific fields
+    snapshotId: snapshotId,
+    targetPath: targetPath
+  });
+}
+    
+    // 5. RUNNING TASK operations (for backup, restore, etc.)
     else if (logMessage.includes('running task')) {
       const taskMatch = logMessage.match(/running task\s+["']([^"']+)["']/);
       const taskName = taskMatch ? taskMatch[1] : 'unknown';
@@ -951,7 +1003,7 @@ processSnapshotsIntoOperations(snapshots: any[]): any[] {
       });
     }
     
-    // 5. TASK FINISHED operations
+    // 6. TASK FINISHED operations
     else if (logMessage.includes('task finished')) {
       const operationId = `finished-${timestamp.getTime()}-${Math.random().toString(36).substr(2, 5)}`;
       
@@ -987,7 +1039,7 @@ processSnapshotsIntoOperations(snapshots: any[]): any[] {
       });
     }
     
-    // 6. ERROR operations
+    // 7. ERROR operations
     else if (log.level === 'error' || log.error) {
       const operationId = `error-${timestamp.getTime()}-${Math.random().toString(36).substr(2, 5)}`;
       
@@ -1010,6 +1062,8 @@ processSnapshotsIntoOperations(snapshots: any[]): any[] {
       });
     }
   }
+    
+
   
   // Filter out less important operations but keep maintenance, index, stats
   return operations.filter(op => {
@@ -1926,7 +1980,7 @@ onTabChange(event: any): void {
           case 'backup': typeColors.push('#4CAF50'); break;
           case 'restore': typeColors.push('#2196F3'); break;
           case 'check': typeColors.push('#FF9800'); break;
-          case 'prune': typeColors.push('#9C27B0'); break;
+          case 'prune': typeColors.push('#b02727ff'); break;
           default: typeColors.push('#607D8B'); break;
         }
       });

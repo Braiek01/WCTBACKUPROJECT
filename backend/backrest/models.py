@@ -288,3 +288,71 @@ class BackrestStats(models.Model):
         
     def __str__(self):
         return f"Stats for {self.repository.name} at {self.created_at}"
+
+class SystemOperation(models.Model):
+    """Track all system operations for activity feed"""
+    
+    OPERATION_TYPES = [
+        ('login', 'User Login'),
+        ('logout', 'User Logout'),
+        ('backup_started', 'Backup Started'),
+        ('backup_completed', 'Backup Completed'),
+        ('backup_failed', 'Backup Failed'),
+        ('restore_started', 'Restore Started'),
+        ('restore_completed', 'Restore Completed'),
+        ('restore_failed', 'Restore Failed'),
+        ('repository_created', 'Repository Created'),
+        ('plan_created', 'Plan Created'),
+        ('maintenance', 'Maintenance Operation'),
+        ('index', 'Index Operation'),
+        ('prune', 'Prune Operation'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('started', 'Started'),
+        ('running', 'Running'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    tenant = models.ForeignKey(
+        settings.TENANT_MODEL,
+        on_delete=models.CASCADE,
+        related_name='system_operations'
+    )
+    
+    operation_type = models.CharField(max_length=50, choices=OPERATION_TYPES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='started')
+    
+    # User who performed the operation (optional for system operations)
+    user = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Related objects (optional)
+    repository = models.ForeignKey(BackrestRepository, on_delete=models.CASCADE, null=True, blank=True)
+    plan = models.ForeignKey(BackrestPlan, on_delete=models.CASCADE, null=True, blank=True)
+    
+    # Operation details
+    description = models.TextField()
+    details = models.JSONField(default=dict, blank=True)
+    
+    # Timestamps
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        db_table = 'backrest_system_operations'
+        ordering = ['-started_at']
+        indexes = [
+            models.Index(fields=['tenant', 'operation_type']),
+            models.Index(fields=['started_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.operation_type} - {self.status}"
+    
+    @property
+    def duration(self):
+        if self.completed_at and self.started_at:
+            return self.completed_at - self.started_at
+        return None
