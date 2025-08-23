@@ -29,6 +29,20 @@ jobs:
         registry: ${{ env.REGISTRY }}
         username: ${{ secrets.AZURE_CLIENT_ID }}
         password: ${{ secrets.AZURE_CLIENT_SECRET }}
+
+        # Build and push frontend image
+    - name: Build and push Frontend Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: ./frontend
+        file: ./frontend/Dockerfile
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:latest
+          ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.run_number }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
         
 
     
