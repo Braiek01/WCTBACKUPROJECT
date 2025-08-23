@@ -2,37 +2,46 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
-# Install deps reproducibly
-COPY package*.json ./
+# Ensure CLI doesn't prompt/phone home in CI
+ENV NG_CLI_ANALYTICS=false
+ENV NODE_ENV=production
+
+# Copy manifests explicitly so npm ci uses the lockfile
+COPY package.json package-lock.json ./
+
+# Strict, reproducible install (fails if lockfile is out of sync)
 RUN npm ci
 
 # Copy source
 COPY . .
 
-# Pure browser build (no SSR/prerender). Put files in a fixed folder.
+# Pure browser build (no SSR/prerender). Fixed output path.
 ARG BUILD_CONFIGURATION=production
-ARG BROWSER_DIST=dist/browser
-RUN npm run build -- --configuration ${BUILD_CONFIGURATION} --output-path=${BROWSER_DIST}
+RUN npm run build -- --configuration ${BUILD_CONFIGURATION} --output-path=dist/browser
 
 # ---------- Runtime stage ----------
 FROM nginx:1.27-alpine
 
-# Copy built browser assets
+# Remove default site content
+RUN rm -rf /usr/share/nginx/html/*
+
+# Copy built assets
 COPY --from=build /app/dist/browser/ /usr/share/nginx/html/
 
-# Minimal NGINX config for Angular SPA + caching
+# Angular SPA routing + static asset caching
 RUN cat > /etc/nginx/conf.d/default.conf <<'NGINX_CONF'
 server {
   listen 80;
   listen [::]:80;
   server_name _;
   root /usr/share/nginx/html;
+  index index.html;
 
   location / {
     try_files $uri $uri/ /index.html;
   }
 
-  # Cache static assets (Angular emits hashed filenames)
+  # Cache hashed static assets for a year
   location ~* \.(?:js|css|png|jpg|jpeg|gif|svg|ico|webp|woff2?)$ {
     expires 1y;
     add_header Cache-Control "public, max-age=31536000, immutable";
