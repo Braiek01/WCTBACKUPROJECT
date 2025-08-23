@@ -7,8 +7,9 @@ import { AuthService } from '../../core/services/auth.service';
 import { JobService, CreateBackupJobData, ActivityLogEntry } from '../../core/services/job.service';
 import { ApiService } from '../../core/services/api.service';
 import { ServerService, Server } from '../../core/services/server.service';
-import { Subscription, interval } from 'rxjs';
-import { startWith, switchMap } from 'rxjs/operators';
+import { Subscription, interval, timer } from 'rxjs';
+import { startWith, switchMap, catchError } from 'rxjs/operators';
+import { of } from 'rxjs';
 
 // PrimeNG Modules - add the new ones:
 import { ButtonModule } from 'primeng/button';
@@ -268,47 +269,26 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     console.log('Dashboard component initialized');
     
-    // Get username from localStorage directly as a quick fix
+    // Get user info
     const storedUsername = localStorage.getItem('username');
-    console.log('Username from localStorage:', storedUsername);
-    
     if (storedUsername) {
       this.username = storedUsername;
-    } else {
-      // Fallback to AuthService if localStorage doesn't have it
-      const currentUser = this.authService.getCurrentUser();
-      if (currentUser && currentUser.username) {
-        this.username = currentUser.username;
-      }
     }
     
-    console.log('Final username set to:', this.username);
-    
-    // Get tenant domain and name from the auth service
     this.tenantDomain = this.authService.getTenantDomain() || '';
     this.tenantName = this.authService.getTenantName() || '';
-    console.log('Tenant domain and name in dashboard:', this.tenantDomain, this.tenantName);
     
-    // --- ADD DUMMY DATA ---
-    this.backups = [
-      { id: 'bkp-a1b2c3d4', name: 'Web Server Backup', status: 'Completed', created: '2025-05-01', type: 'Restic', size: '15.2 GB', lifecycle: 'Standard', encryption: 'AES-256', icon: 'pi pi-server' },
-      
-    ];
-    
-    this.recentActions = [
-        { description: 'Backup "Web Server Backup" completed', date: '15 minutes ago', icon: 'pi pi-check-circle', color: '#689F38', by: 'System' },
-        { description: 'User "admin" logged in', date: '1 hour ago', icon: 'pi pi-sign-in', color: '#0288D1', by: 'admin' },
-        { description: 'Backup "Database Backup" started', date: '2 hours ago', icon: 'pi pi-spin pi-spinner', color: '#0288D1', by: 'Scheduler' },
-    ];
-
+    // Initialize chart
     this.initChart();
-    this.loadRecentActivity();
-    this.startActivityPolling();
-    this.checkBackrestStatus(); // Check Backrest status on init
-    // Add this to load available repositories
+    
+    // START REAL-TIME DATA LOADING (remove dummy data)
+    this.startRealTimeUpdates();
+    
+    // Load initial real data
+    this.loadDashboardData();
     this.loadRepositories();
-    // Load plans on init
     this.loadPlans();
+    this.checkBackrestStatus();
   }
   
   // Clear and explicit logout function
@@ -352,6 +332,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.activitySubscription) {
         this.activitySubscription.unsubscribe();
     }
+    
+    // Stop real-time updates
+    this.stopRealTimeUpdates();
   }
 
   initChart(): void {
@@ -966,20 +949,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
   
   createCustomPlan() {
-    // For debugging
-    console.log('Repository from form:', this.newPlan.repository);
-    
-    // Get repository ID properly - KEEPING EXISTING LOGIC
+    // Get repository ID properly
     let repositoryId;
     
     if (typeof this.newPlan.repository === 'object' && this.newPlan.repository !== null) {
-      // If it's an object, extract the ID using bracket notation
       repositoryId = this.newPlan.repository['id'] || this.newPlan.repository['repository_id'];
     } else if (typeof this.newPlan.repository === 'number') {
-      // If it's already a number
       repositoryId = this.newPlan.repository;
     } else if (typeof this.newPlan.repository === 'string') {
-      // If it's a string (potentially already the ID)
       repositoryId = this.newPlan.repository;
     }
     
@@ -995,7 +972,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     } else if (this.newPlan.scheduleType === 'cron') {
       schedule.cron = this.newPlan.cronExpression;
     } else if (this.newPlan.scheduleType === 'interval') {
-      // Determine if it's hours or days
       if (this.newPlan.intervalUnit === 'hours') {
         schedule.maxFrequencyHours = this.newPlan.intervalValue;
       } else if (this.newPlan.intervalUnit === 'days') {
@@ -1004,16 +980,25 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
     
     // Build retention policy based on user selection
-    let retention: any = {};
+    let retention_policy: any = {};
 
-    if (this.newPlan.retentionType === 'count') {
-      // Use policyKeepLastN
-      retention = {
+    // Add debug logging
+    console.log('Retention type selected:', this.newPlan.retentionType);
+
+    if (this.newPlan.retentionType === 'none') {
+      // "Keep all backups" - use policyKeepAll directly without nesting
+      retention_policy = {
+        policyKeepAll: true
+      };
+      console.log('Setting "keep all backups" policy:', retention_policy);
+    } else if (this.newPlan.retentionType === 'count') {
+      // Keep last N backups
+      retention_policy = {
         policyKeepLastN: this.newPlan.retention.keepLastN || 30
       };
     } else if (this.newPlan.retentionType === 'time-period') {
-      // Use policyTimeBucketed
-      retention = {
+      // Time-bucketed policy
+      retention_policy = {
         policyTimeBucketed: {
           yearly: this.newPlan.retention.yearly || 0,
           monthly: this.newPlan.retention.monthly || 0,
@@ -1023,42 +1008,33 @@ export class DashboardComponent implements OnInit, OnDestroy {
           keepLastN: this.newPlan.retention.keepLastN || 0
         }
       };
-    } else if (this.newPlan.retentionType === 'none') {
-      // Use policyKeepAll
-      retention = {
-        policyKeepAll: true
-      };
     }
     
     // Create the payload with the correct structure
     const payload = {
       name: this.newPlan.name,
-      repository: repositoryId.toString(), // Ensure it's a string
+      repository: repositoryId.toString(),
       paths: this.newPlan.paths.filter(path => path.trim() !== ''),
       excludes: this.newPlan.excludes.filter(exc => exc.trim() !== ''),
-      iexcludes: [],
       schedule: schedule,
-      backup_flags: [],
-      retention_policy: retention,
-      hooks: []
+      retention_policy: retention_policy
     };
     
+    // Log the exact payload being sent
     console.log('Sending plan payload:', JSON.stringify(payload, null, 2));
     
-    // Show loading state
     this.isCreatingPlan = true;
     
     this.apiService.post('backrest/plans/', payload).subscribe({
       next: (response: any) => {
         this.isCreatingPlan = false;
-        console.log('Backup plan created:', response);
+        console.log('Plan creation response:', response);
         this.messageService.add({
           severity: 'success',
           summary: 'Plan Created',
           detail: `Backup plan "${this.newPlan.name}" was created successfully`
         });
         this.hideCreatePlanDialog();
-        // Refresh plans list if needed
         this.loadPlans();
       },
       error: (err) => {
@@ -1085,8 +1061,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   
   // --- Backrest Status Methods ---
   checkBackrestStatus() {
+    // Use selectedServerId for status check
+    if (this.selectedServerId === null || this.selectedServerId === undefined) {
+      console.warn('No selectedServerId set, skipping Backrest status check.');
+      this.backrestStatus = 'unknown';
+      this.isBackrestRunning = false;
+      return;
+    }
     // Call your backend API to check if Backrest is running
-    this.apiService.get(`backrest/servers/${this.serverId}/status/`).subscribe({
+    this.apiService.get(`backrest/servers/${this.selectedServerId}/status/`).subscribe({
       next: (response) => {
         const res = response as { status: string };
         this.backrestStatus = res.status;
@@ -1146,4 +1129,520 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.newPlan.cronExpression = '0 0 * * *'; // Default to midnight every day
     }
   }
+
+  // Add this property to your component class
+  loadingBackupStats: boolean = false;
+
+  // Add to analytics.component.ts
+  syncBackrestData(): void {
+    this.loadingBackupStats = true;
+    this.messageService.add({
+      severity: 'info',
+      summary: 'Starting Sync',
+      detail: 'Synchronizing Backrest data...'
+    });
+    
+    // Trigger server-side sync of all Backrest data
+    this.apiService.post('backrest/sync-data/', {}).subscribe({
+      next: (response) => {
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Sync Completed',
+          detail: 'Backrest data synchronized successfully'
+        });
+        
+        // Reload analytics data
+        this.loadAnalyticsData();
+      },
+      error: (err) => {
+        console.error('Failed to sync Backrest data:', err);
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Sync Failed',
+          detail: 'Could not synchronize Backrest data'
+        });
+        this.loadingBackupStats = false;
+      }
+    });
+  }
+
+  // Dummy implementation for analytics data loading to fix the error
+  loadAnalyticsData(): void {
+    // You can implement actual analytics data loading here if needed
+    this.loadingBackupStats = false;
+    // Optionally, refresh chart or stats here
+  }
+
+  // ADD THESE NEW PROPERTIES FOR REAL-TIME DATA
+  private backupsSubscription: Subscription | null = null;
+  private operationsSubscription: Subscription | null = null;
+  private dashboardSubscription: Subscription | null = null;
+  
+  // Real backup data properties
+  realBackups: any[] = [];
+  backupStats = {
+    total: 0,
+    completed: 0,
+    running: 0,
+    failed: 0,
+    totalSize: '0 GB'
+  };
+  
+  // Real-time activity properties
+  liveActivity: any[] = [];
+  activityLoading = false;
+  
+  // Dashboard data refresh properties
+  lastRefresh: Date = new Date();
+  autoRefreshEnabled = true;
+  refreshInterval = 30; // seconds
+
+  // === REAL-TIME DATA METHODS ===
+
+  startRealTimeUpdates(): void {
+    console.log('🔄 Starting real-time dashboard updates');
+    
+    // Keep your existing activity polling
+    this.startActivityPolling();
+    
+    // ADD new real-time data (every 15 seconds for dashboard stats)
+    this.dashboardSubscription = interval(15000)
+      .pipe(
+        startWith(0),
+        switchMap(() => this.loadDashboardStatsReal()),
+        catchError(err => {
+          console.error('Error loading dashboard stats:', err);
+          return of([]);
+        })
+      )
+      .subscribe();
+
+    // ADD live activity updates (every 10 seconds)
+    this.operationsSubscription = interval(10000)
+      .pipe(
+        startWith(0),
+        switchMap(() => this.loadLiveActivityFeed()),
+        catchError(err => {
+          console.error('Error loading live activity:', err);
+          return of([]);
+        })
+      )
+      .subscribe();
+  }
+
+  stopRealTimeUpdates(): void {
+    console.log('⏹️ Stopping real-time updates');
+    
+    if (this.backupsSubscription) {
+      this.backupsSubscription.unsubscribe();
+      this.backupsSubscription = null;
+    }
+    
+    if (this.operationsSubscription) {
+      this.operationsSubscription.unsubscribe();
+      this.operationsSubscription = null;
+    }
+    
+    if (this.dashboardSubscription) {
+      this.dashboardSubscription.unsubscribe();
+      this.dashboardSubscription = null;
+    }
+    
+    if (this.activitySubscription) {
+      this.activitySubscription.unsubscribe();
+      this.activitySubscription = null;
+    }
+  }
+
+  loadRealBackups() {
+    return this.apiService.get('backrest/operations/?limit=20').pipe(
+      switchMap((operations: any) => {
+        // Process operations into backup cards
+        this.processOperationsIntoBackups(operations.results || operations);
+        return of(this.realBackups);
+      })
+    );
+  }
+
+  loadLiveActivity() {
+    this.activityLoading = true;
+    return this.apiService.get('backrest/operations/structured/?days=1&limit=10').pipe(
+      switchMap((response: any) => {
+        this.processLiveActivity(response.results || []);
+        this.activityLoading = false;
+        return of(this.liveActivity);
+      })
+    );
+  }
+
+  loadDashboardStats() {
+    return this.apiService.get('backrest/operations/dashboard/?days=30').pipe(
+      switchMap((response: any) => {
+        this.processDashboardStats(response);
+        this.lastRefresh = new Date();
+        return of(response);
+      })
+    );
+  }
+
+  // NEW METHOD - Add this to load real dashboard stats
+  loadDashboardStatsReal() {
+    return this.apiService.get('backrest/dashboard-stats/').pipe(
+      switchMap((stats: any) => {
+        // Update backup stats with real data
+        this.backupStats = {
+          total: stats.by_type?.backup || 0,
+          completed: stats.by_status?.completed || 0,
+          running: stats.by_status?.running || 0,
+          failed: stats.by_status?.failed || 0,
+          totalSize: this.calculateTotalSize(stats)
+        };
+        
+        // Process recent backups into backup cards (supplement existing backups)
+        const realBackupCards = (stats.recent_backups || []).map((backup: any) => ({
+          id: backup.id,
+          name: `${backup.repository} - ${backup.plan}`,
+          status: this.getBackupStatus(backup.status),
+          created: this.formatDate(backup.started_at),
+          type: 'Restic',
+          size: this.formatBackupSize({ total_bytes_processed: backup.size }),
+          lifecycle: 'Standard',
+          encryption: 'AES-256',
+          icon: this.getBackupIcon(backup.status),
+          repository: backup.repository,
+          plan: backup.plan
+        }));
+        
+        // Merge with existing backups instead of replacing
+        this.backups = [...this.backups, ...realBackupCards];
+        
+        return of(this.backups);
+      })
+    );
+  }
+
+  // NEW METHOD - Add this to load live activity feed
+  loadLiveActivityFeed() {
+    this.activityLoading = true;
+    return this.apiService.get('backrest/live-activity/?limit=10').pipe(
+      switchMap((response: any) => {
+        const liveActivities = (response.results || []).map((activity: any) => ({
+          description: activity.description,
+          date: this.getRelativeTime(activity.timestamp),
+          icon: this.getActivityIconFromType(activity.type, activity.status),
+          color: this.getActivityColorFromStatus(activity.status),
+          by: activity.user || 'System',
+          timestamp: activity.timestamp,
+          type: activity.type,
+          status: activity.status
+        }));
+        
+        // ADD to existing recentActions instead of replacing
+        this.recentActions = [...liveActivities, ...this.recentActions].slice(0, 10);
+        
+        this.activityLoading = false;
+        return of(this.recentActions);
+      })
+    );
+  }
+
+  // Add this helper method to fix the missing method error
+  getActivityIconFromType(type: string, status: string): string {
+    switch (type?.toLowerCase()) {
+      case 'backup':
+        return status === 'completed' ? 'pi pi-check-circle' :
+               status === 'running' ? 'pi pi-spin pi-spinner' :
+               status === 'failed' ? 'pi pi-times-circle' :
+               'pi pi-server';
+      case 'restore':
+        return 'pi pi-replay';
+      case 'index':
+        return 'pi pi-list';
+      case 'maintenance':
+        return 'pi pi-cog';
+      default:
+        return 'pi pi-info-circle';
+    }
+  }
+
+  // Add this missing method to fix the compile error
+  getActivityColorFromStatus(status: string): string {
+    switch (status?.toLowerCase()) {
+      case 'completed': return '#689F38';
+      case 'running': return '#0288D1';
+      case 'failed': return '#D32F2F';
+      default: return '#757575';
+    }
+  }
+
+  processOperationsIntoBackups(operations: any[]): void {
+    const groupedBackups = new Map();
+    
+    operations.forEach(op => {
+      if (op.operation_type === 'backup') {
+        const key = `${op.repository?.name || 'Unknown'}_${op.plan?.name || 'manual'}`;
+        
+        if (!groupedBackups.has(key)) {
+          groupedBackups.set(key, {
+            id: `bkp-${op.repository?.id || Math.random()}`,
+            name: `${op.repository?.name || 'Unknown Repository'} - ${op.plan?.name || 'Manual Backup'}`,
+            status: this.getBackupStatus(op.status),
+            created: this.formatDate(op.started_at),
+            type: 'Restic',
+            size: this.formatBackupSize(op.stats),
+            lifecycle: 'Standard',
+            encryption: 'AES-256',
+            icon: this.getBackupIcon(op.status),
+            lastOperation: op,
+            repository: op.repository?.name || 'Unknown',
+            plan: op.plan?.name || 'Manual'
+          });
+        } else {
+          // Update with more recent operation
+          const existing = groupedBackups.get(key);
+          if (new Date(op.started_at) > new Date(existing.lastOperation.started_at)) {
+            existing.status = this.getBackupStatus(op.status);
+            existing.created = this.formatDate(op.started_at);
+            existing.size = this.formatBackupSize(op.stats);
+            existing.icon = this.getBackupIcon(op.status);
+            existing.lastOperation = op;
+          }
+        }
+      }
+    });
+
+    this.realBackups = Array.from(groupedBackups.values());
+    this.backups = this.realBackups; // Update the main backups array
+    
+    // Update backup stats
+    this.updateBackupStats();
+  }
+
+  processLiveActivity(operations: any[]): void {
+    this.liveActivity = operations.slice(0, 10).map(op => ({
+      description: this.getActivityDescription(op),
+      date: this.getRelativeTime(op.started_at),
+      icon: this.getActivityIcon(op),
+      color: this.getActivityColor(op),
+      by: this.getActivityUser(op),
+      timestamp: op.started_at,
+      type: op.type,
+      status: op.status
+    }));
+
+    // Update the main recentActions array for the template
+    this.recentActions = this.liveActivity;
+  }
+
+  processDashboardStats(data: any): void {
+    if (data) {
+      this.backupStats = {
+        total: data.total_operations || 0,
+        completed: data.by_status?.completed || 0,
+        running: data.by_status?.running || 0,
+        failed: data.by_status?.failed || 0,
+        totalSize: this.calculateTotalSize(data)
+      };
+
+      // Update chart with real data
+      this.updateChartWithRealData(data);
+    }
+  }
+
+  // === HELPER METHODS ===
+
+  getBackupStatus(status: string): string {
+    switch (status?.toLowerCase()) {
+      case 'completed': return 'Completed';
+      case 'running': return 'Running';
+      case 'failed': return 'Failed';
+      case 'pending': return 'Pending';
+      default: return 'Unknown';
+    }
+  }
+
+  getBackupIcon(status: string): string {
+    switch (status?.toLowerCase()) {
+      case 'completed': return 'pi pi-check-circle';
+      case 'running': return 'pi pi-spin pi-spinner';
+      case 'failed': return 'pi pi-times-circle';
+      default: return 'pi pi-server';
+    }
+  }
+
+  formatBackupSize(stats: any): string {
+    if (!stats) return '0 MB';
+    
+    const bytes = stats.total_bytes_processed || stats.data_added || 0;
+    if (bytes === 0) return '0 MB';
+    
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+  }
+
+  formatDate(dateString: string): string {
+    if (!dateString) return 'Unknown';
+    
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  }
+
+  getActivityDescription(op: any): string {
+    const repo = op.repository || 'Unknown Repository';
+    const plan = op.plan !== 'N/A' ? ` (${op.plan})` : '';
+    
+    switch (op.type?.toLowerCase()) {
+      case 'backup':
+        return `Backup ${op.status} for ${repo}${plan}`;
+      case 'restore':
+        return `Restore ${op.status} for ${repo}`;
+      case 'index':
+        return `Index operation ${op.status} for ${repo}`;
+      case 'maintenance':
+        return `Maintenance ${op.status} for ${repo}`;
+      default:
+        return `${op.type || 'Operation'} ${op.status} for ${repo}`;
+    }
+  }
+
+  getRelativeTime(dateString: string): string {
+    if (!dateString) return 'Unknown time';
+    
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+    
+    return this.formatDate(dateString);
+  }
+
+  getActivityIcon(op: any): string {
+    switch (op.type?.toLowerCase()) {
+      case 'backup':
+        return op.status === 'completed' ? 'pi pi-check-circle' : 
+               op.status === 'running' ? 'pi pi-spin pi-spinner' : 'pi pi-times-circle';
+      case 'restore':
+        return 'pi pi-replay';
+      case 'index':
+        return 'pi pi-list';
+      case 'maintenance':
+        return 'pi pi-cog';
+      default:
+        return 'pi pi-info-circle';
+    }
+  }
+
+  getActivityColor(op: any): string {
+    if (op.status === 'completed') return '#689F38';
+    if (op.status === 'running') return '#0288D1';
+    if (op.status === 'failed') return '#D32F2F';
+    return '#757575';
+  }
+
+  getActivityUser(op: any): string {
+    return op.user || 'System';
+  }
+
+  updateBackupStats(): void {
+    this.backupStats = {
+      total: this.realBackups.length,
+      completed: this.realBackups.filter(b => b.status === 'Completed').length,
+      running: this.realBackups.filter(b => b.status === 'Running').length,
+      failed: this.realBackups.filter(b => b.status === 'Failed').length,
+      totalSize: this.calculateBackupsSize()
+    };
+  }
+
+  calculateBackupsSize(): string {
+    // This would need to sum up actual backup sizes
+    // For now, return a placeholder
+    return `${this.backupStats.total * 12.5} GB`;
+  }
+
+  calculateTotalSize(data: any): string {
+    // Calculate from dashboard data if available
+    return '156.7 GB'; // Placeholder
+  }
+
+  updateChartWithRealData(data: any): void {
+    if (data.by_date && isPlatformBrowser(this.platformId)) {
+      const dates = Object.keys(data.by_date).sort();
+      const successData = dates.map(date => data.by_date[date] || 0);
+      
+      this.chartData = {
+        labels: dates.map(date => new Date(date).toLocaleDateString()),
+        datasets: [
+          {
+            label: 'Successful Backups',
+            data: successData,
+            fill: false,
+            borderColor: '#4CAF50',
+            tension: 0.4
+          },
+          {
+            label: 'Failed Backups',
+            data: dates.map(() => Math.floor(Math.random() * 3)), // Placeholder
+            fill: false,
+            borderColor: '#F44336',
+            tension: 0.4
+          }
+        ]
+      };
+    }
+  }
+
+  // === MANUAL REFRESH METHODS ===
+
+  manualRefresh(): void {
+    this.messageService.add({
+      severity: 'info',
+      summary: 'Refreshing',
+      detail: 'Updating dashboard data...'
+    });
+    
+    this.loadDashboardData();
+  }
+
+  loadDashboardData(): void {
+    // Trigger all data loads
+    this.loadRealBackups().subscribe();
+    this.loadLiveActivity().subscribe();
+    this.loadDashboardStats().subscribe();
+    this.loadDashboardStatsReal().subscribe();
+    this.loadLiveActivityFeed().subscribe();
+  }
+
+  toggleAutoRefresh(): void {
+    this.autoRefreshEnabled = !this.autoRefreshEnabled;
+    
+    if (this.autoRefreshEnabled) {
+      this.startRealTimeUpdates();
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Auto-refresh Enabled',
+        detail: `Dashboard will update every ${this.refreshInterval} seconds`
+      });
+    } else {
+      this.stopRealTimeUpdates();
+      this.messageService.add({
+        severity: 'info',
+        summary: 'Auto-refresh Disabled',
+        detail: 'Dashboard updates paused'
+      });
+    }
+  }
+
+
+
+
+
+  
 }

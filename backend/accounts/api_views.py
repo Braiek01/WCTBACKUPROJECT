@@ -10,6 +10,9 @@ from django.db import IntegrityError
 from tenants.utils import create_tenant_member_and_sync_to_schema, get_tenant_sub_users, modify_tenant_sub_user, delete_tenant_sub_user
 from tenants.models import Tenant
 import logging
+from backrest.activity_logger import ActivityLogger
+
+
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -66,12 +69,30 @@ class IsSelfOrTenantAdminOrOwner(permissions.BasePermission):
         return False
 
 # --- Token Views (MyTokenObtainPairView) ---
+# Add this import at the top of the file
+# Find your existing MyTokenObtainPairView and update it like this:
 class MyTokenObtainPairView(TokenObtainPairView):
-    """
-    Custom TokenObtainPairView to use the MyTokenObtainPairSerializer.
-    This allows customizing the claims in the JWT token.
-    """
     serializer_class = MyTokenObtainPairSerializer
+    
+    def post(self, request, *args, **kwargs):
+        # Call the parent method to handle token generation
+        response = super().post(request, *args, **kwargs)
+        
+        # If authentication was successful (status 200), log the login
+        if response.status_code == 200:
+            try:
+                username = request.data.get('username')
+                if username and hasattr(request, 'tenant'):
+                    # Log the login activity
+                    ActivityLogger.log_login(
+                        tenant=request.tenant,
+                        username=username
+                    )
+                    logger.info(f"✅ Logged login activity for user: {username}")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to log login activity: {e}")
+        
+        return response
 
 # --- API Views ---
 

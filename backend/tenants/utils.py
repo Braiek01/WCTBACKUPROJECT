@@ -255,84 +255,53 @@ def modify_tenant_sub_user(user_to_modify_username, tenant_obj, data_to_update):
     Modifies a sub-user's details in both public and tenant schemas.
     `data_to_update` can contain: first_name, last_name, email, is_active, role_in_tenant, password.
     """
-    logger.info(f"Attempting to modify sub-user '{user_to_modify_username}' in tenant '{tenant_obj.schema_name}'")
     try:
         with transaction.atomic():
+            # Get the user
             public_user = User.objects.get(username=user_to_modify_username, tenant=tenant_obj)
-            if public_user.role_in_tenant == User.RoleInTenant.OWNER:
-                raise PermissionError("Tenant owner details cannot be modified using this function.")
-
-            public_updated_fields = []
-            password_changed = False
-
+            
+            # Update standard fields
             for field_name in ['first_name', 'last_name', 'email']:
                 if field_name in data_to_update:
-                    new_value = data_to_update[field_name]
-                    if field_name == 'email' and new_value is not None and not str(new_value).strip():
-                        new_value = None
-                    setattr(public_user, field_name, new_value)
-                    public_updated_fields.append(field_name)
+                    setattr(public_user, field_name, data_to_update[field_name])
             
+            # Handle is_active
             if 'is_active' in data_to_update:
-                setattr(public_user, 'is_active', data_to_update['is_active'])
-                public_updated_fields.append('is_active')
-            
-            if 'role_in_tenant' in data_to_update:
-                new_role_str = data_to_update['role_in_tenant']
-                # Ensure new_role_str is a valid value from User.RoleInTenant choices
-                # For simplicity, assuming it's 'admin' or 'operator' string
-                if new_role_str == User.RoleInTenant.OWNER.value: # Compare with .value
-                    raise ValueError("Cannot change role_in_tenant to OWNER for a sub-user.")
+                public_user.is_active = data_to_update['is_active']
                 
-                # Convert string to Enum member if your model field expects it,
-                # or ensure your model's choices allow direct string assignment.
-                # Assuming direct string assignment works or model field handles it.
-                try:
-                    new_role_enum = User.RoleInTenant(new_role_str)
-                except ValueError:
-                    raise ValueError(f"Invalid target role_in_tenant string: {new_role_str}")
-
-                public_user.role_in_tenant = new_role_enum # Assign Enum member
-                public_updated_fields.append('role_in_tenant')
-                new_is_staff = (new_role_enum == User.RoleInTenant.ADMIN)
-                if public_user.is_staff != new_is_staff:
-                    public_user.is_staff = new_is_staff
-                    public_updated_fields.append('is_staff')
-
+            # Handle role_in_tenant 
+            if 'role_in_tenant' in data_to_update:
+                public_user.role_in_tenant = data_to_update['role_in_tenant']
+            
+            # Handle password separately
             if 'password' in data_to_update and data_to_update['password']:
                 public_user.set_password(data_to_update['password'])
-                password_changed = True
+                
+            # Save the public user
+            public_user.save()
             
-            if public_updated_fields:
-                public_user.save(update_fields=public_updated_fields)
-            elif password_changed: 
-                 public_user.save()
-
-            logger.info(f"Public sub-user '{public_user.username}' updated. Fields: {public_updated_fields}, PwdChanged: {password_changed}")
-
+            # Update the tenant schema user too
             with tenant_context(tenant_obj):
-                tenant_schema_user = User.objects.get(username=user_to_modify_username)
-                for field in public_updated_fields: # Mirror updated fields
-                    setattr(tenant_schema_user, field, getattr(public_user, field))
-                # Also mirror global role and staff status if they were part of public_updated_fields implicitly
-                tenant_schema_user.role = public_user.role 
-                tenant_schema_user.is_staff = public_user.is_staff
-
-                if password_changed:
-                    tenant_schema_user.set_password(data_to_update['password'])
-                tenant_schema_user.save()
-                logger.info(f"Tenant schema sub-user '{tenant_schema_user.username}' synced.")
-            
+                tenant_user = User.objects.get(username=user_to_modify_username)
+                
+                # Copy the updated fields
+                tenant_user.first_name = public_user.first_name
+                tenant_user.last_name = public_user.last_name
+                tenant_user.email = public_user.email
+                tenant_user.is_active = public_user.is_active
+                tenant_user.role_in_tenant = public_user.role_in_tenant
+                
+                # Important: Copy the hashed password from public user
+                if 'password' in data_to_update and data_to_update['password']:
+                    tenant_user.password = public_user.password
+                    
+                tenant_user.save()
+                
             return public_user
-    except User.DoesNotExist:
-        logger.error(f"Sub-user '{user_to_modify_username}' not found in tenant '{tenant_obj.schema_name}' for modification.")
-        raise ValueError(f"User '{user_to_modify_username}' not found.")
-    except (ValueError, PermissionError) as e:
-        logger.warning(f"Modification of sub-user '{user_to_modify_username}' failed: {str(e)}")
-        raise
+            
     except Exception as e:
-        logger.error(f"Unexpected error modifying sub-user '{user_to_modify_username}': {e}", exc_info=True)
-        raise
+        logger.error(f"Error modifying user {user_to_modify_username}: {str(e)}")
+        raise ValueError(f"Failed to update user: {str(e)}")
 
 def delete_tenant_sub_user(user_to_delete_username, tenant_obj, permanent=False):
     """Deletes (or deactivates) a sub-user from public and tenant schemas."""

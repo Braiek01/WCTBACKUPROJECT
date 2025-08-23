@@ -76,6 +76,7 @@
           <span>Job logs</span>
         </a>
       </li>
+
       <li>
         <a [routerLink]="['/', tenantName, 'analytics']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
           <i class="pi pi-chart-line mr-2"></i>
@@ -104,158 +105,422 @@
       <h2 class="text-2xl font-semibold mb-0 text-white">Job Logs</h2>
     </div>
     <div class="flex gap-2">
-      <button pButton pRipple icon="pi pi-refresh" label="Refresh" class="p-button-outlined" (click)="loadJobLogs()"></button>
+      <button pButton pRipple icon="pi pi-refresh" label="Refresh" 
+        class="p-button-outlined" (click)="loadJobLogs()"></button>
+      <button pButton pRipple icon="pi pi-sync" label="Sync Logs" 
+        class="p-button" (click)="syncLogs()"></button>
     </div>
   </div>
 
-  <!-- Filter and Controls Card -->
-  <div class="card mb-4">
-    <div class="grid">
-      <div class="col-12 md:col-4">
-        <label class="block mb-2 font-medium">Date Range</label>
-        <p-calendar [(ngModel)]="filterDateRange" selectionMode="range" [showButtonBar]="true" 
-                   placeholder="Select date range" (onSelect)="applyFilters()" styleClass="w-full"></p-calendar>
+  <!-- TabView for multiple views -->
+  <p-tabView (onChange)="onTabChange($event)">
+    <!-- Operations List Tab -->
+    <p-tabPanel header="Operations">
+      <!-- Filter and Controls Card -->
+      <div class="card mb-4">
+        <div class="grid">
+          <div class="col-12 md:col-4">
+            <label class="block mb-2 font-medium">Date Range</label>
+            <p-calendar [(ngModel)]="filterDateRange" selectionMode="range" [showButtonBar]="true" 
+                      placeholder="Select date range" (onSelect)="applyFilters()" styleClass="w-full"></p-calendar>
+          </div>
+          <div class="col-12 md:col-3">
+            <label class="block mb-2 font-medium">Status</label>
+            <p-dropdown [options]="statusOptions" [(ngModel)]="filterStatus" placeholder="All Statuses" 
+                      (onChange)="applyFilters()" styleClass="w-full"></p-dropdown>
+          </div>
+          <div class="col-12 md:col-3">
+            <label class="block mb-2 font-medium">Operation Type</label>
+            <p-dropdown [options]="typeOptions" [(ngModel)]="filterType" placeholder="All Types" 
+                      (onChange)="applyFilters()" styleClass="w-full"></p-dropdown>
+          </div>
+          <div class="col-12 md:col-2 flex align-items-end">
+            <button pButton pRipple icon="pi pi-filter-slash" label="Reset" class="p-button-outlined w-full" 
+                    (click)="resetFilters()"></button>
+          </div>
+        </div>
       </div>
-      <div class="col-12 md:col-3">
-        <label class="block mb-2 font-medium">Status</label>
-        <p-dropdown [options]="statusOptions" [(ngModel)]="filterStatus" placeholder="All Statuses" 
-                   (onChange)="applyFilters()" styleClass="w-full"></p-dropdown>
-      </div>
-      <div class="col-12 md:col-3">
-        <label class="block mb-2 font-medium">Operation Type</label>
-        <p-dropdown [options]="typeOptions" [(ngModel)]="filterType" placeholder="All Types" 
-                   (onChange)="applyFilters()" styleClass="w-full"></p-dropdown>
-      </div>
-      <div class="col-12 md:col-2 flex align-items-end">
-        <button pButton pRipple icon="pi pi-filter-slash" label="Reset" class="p-button-outlined w-full" 
-                (click)="resetFilters()"></button>
-      </div>
-    </div>
-  </div>
 
-  <!-- Job Logs Table -->
-  <div class="card">
-    <p-table [value]="filteredLogs" [paginator]="true" [rows]="10" [showCurrentPageReport]="true" 
+      <!-- Job Logs Table -->
+      <div class="card">
+        <p-table [value]="filteredLogs" [paginator]="true" [rows]="10" [showCurrentPageReport]="true" 
              [rowsPerPageOptions]="[10, 25, 50]" [loading]="loading" 
              styleClass="p-datatable-striped p-datatable-sm" [sortField]="'start_time'" [sortOrder]="-1"
              currentPageReportTemplate="Showing {first} to {last} of {totalRecords} logs">
-      <ng-template pTemplate="header">
-        <tr>
-          <th pSortableColumn="operation_id" style="width: 15%">ID <p-sortIcon field="operation_id"></p-sortIcon></th>
-          <th pSortableColumn="operation_type" style="width: 15%">Type <p-sortIcon field="operation_type"></p-sortIcon></th>
-          <th pSortableColumn="start_time" style="width: 20%">Start Time <p-sortIcon field="start_time"></p-sortIcon></th>
-          <th style="width: 15%">Duration</th>
-          <th pSortableColumn="status" style="width: 15%">Status <p-sortIcon field="status"></p-sortIcon></th>
-          <th style="width: 10%">Actions</th>
-        </tr>
-      </ng-template>
-      <ng-template pTemplate="body" let-log>
-        <tr>
-          <td>{{ log.operation_id }}</td>
-          <td>
-            <div class="flex align-items-center">
-              <i [class]="getOperationTypeIcon(log.operation_type)" class="mr-2"></i>
-              <span>{{ log.operation_type | titlecase }}</span>
+          <ng-template pTemplate="header">
+            <tr>
+              <th pSortableColumn="id" style="width: 15%">ID <p-sortIcon field="id"></p-sortIcon></th>
+              <th pSortableColumn="type" style="width: 15%">Type <p-sortIcon field="type"></p-sortIcon></th>
+              <th pSortableColumn="startTime" style="width: 20%">Start Time <p-sortIcon field="startTime"></p-sortIcon></th>
+              <th style="width: 15%">Server</th>
+              <th pSortableColumn="status" style="width: 15%">Status <p-sortIcon field="status"></p-sortIcon></th>
+              <th style="width: 20%">Message</th>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="body" let-log>
+            <tr (click)="showDetailsDialog(log)">
+              <td>
+                <div class="font-mono text-sm">{{ log.id.substring(0, 12) }}...</div>
+                <small *ngIf="log.snapshotData" class="text-blue-400">Snapshot ID</small>
+                <small *ngIf="log.isStructuredOperation" class="text-purple-400">Operation ID</small>
+              </td>
+              <td>
+                <div class="flex align-items-center">
+                  <i [class]="getOperationTypeIcon(log.type)" class="mr-2"></i>
+                  <span>{{log.type | titlecase}}</span>
+                </div>
+                <small *ngIf="log.plan && log.plan !== 'N/A'" class="text-500 block mt-1">
+                  Plan: {{log.plan}}
+                </small>
+                <!-- Add indicator for data source -->
+                <small *ngIf="log.snapshotData" class="text-blue-400 block">From Snapshot</small>
+                <small *ngIf="log.isStructuredOperation" class="text-purple-400 block">From Logs</small>
+              </td>
+              <td>
+                {{log.startTime | date:'medium'}}
+                <small *ngIf="log.duration > 0" class="text-500 block">
+                  Duration: {{log.duration < 60 ? (log.duration | number:'1.1-1') + 's' : 
+                              ((log.duration / 60) | number:'1.1-1') + 'min'}}
+                </small>
+              </td>
+              <td>
+                <!-- Show both server name and repository -->
+                <div class="font-semibold">
+                  {{ log.hostname || log.server_name || 'Unknown Server' }}
+                </div>
+                <small *ngIf="log.repository || log.repository_name" class="text-500 block">
+                  Repo: {{ log.repository || log.repository_name }}
+                </small>
+              </td>
+              <td>
+                <p-tag [severity]="getStatusSeverity(log.status)" [value]="log.status | titlecase"></p-tag>
+              </td>
+              <td>
+                <div class="text-overflow-ellipsis" style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">
+                  {{log.message || 'No message'}}
+                </div>
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="emptymessage">
+            <tr>
+              <td colspan="6" class="text-center p-5">
+                <div class="flex flex-column align-items-center">
+                  <i class="pi pi-info-circle text-5xl text-700 mb-3"></i>
+                  <span>No job logs found</span>
+                  <small class="text-500">Try adjusting your filters or refreshing</small>
+                </div>
+              </td>
+            </tr>
+          </ng-template>
+        </p-table>
+      </div>
+    </p-tabPanel>
+    
+    <!-- Dashboard Tab -->
+    <p-tabPanel header="Dashboard">
+      <div class="grid" *ngIf="dashboardData">
+        <!-- Summary Cards -->
+        <div class="col-12 md:col-6 lg:col-3">
+          <div class="card border-left-4 border-primary h-full">
+            <div class="flex flex-column">
+              <span class="text-xl font-medium mb-3">Total Operations</span>
+              <span class="text-4xl font-bold">{{dashboardData.total_operations || 0}}</span>
             </div>
-          </td>
-          <td>{{ formatDate(log.start_time) }}</td>
-          <td>{{ getDuration(log) }}</td>
-          <td>
-            <p-tag [severity]="getStatusSeverity(log.status)" [value]="log.status | titlecase"></p-tag>
-          </td>
-          <td>
-            <button pButton pRipple icon="pi pi-eye" class="p-button-rounded p-button-text" 
-                    pTooltip="View Details" tooltipPosition="top" (click)="showDetailsDialog(log)"></button>
-          </td>
-        </tr>
-      </ng-template>
-      <ng-template pTemplate="emptymessage">
-        <tr>
-          <td colspan="6" class="text-center p-5">
-            <div class="flex flex-column align-items-center">
-              <i class="pi pi-info-circle text-5xl text-700 mb-3"></i>
-              <span>No job logs found</span>
-              <small class="text-500">Try adjusting your filters or refreshing</small>
+          </div>
+        </div>
+        
+        <div class="col-12 md:col-6 lg:col-3">
+          <div class="card border-left-4 border-success h-full">
+            <div class="flex flex-column">
+              <span class="text-xl font-medium mb-3">Successful</span>
+              <span class="text-4xl font-bold">{{dashboardData.by_status?.completed || 0}}</span>
             </div>
-          </td>
-        </tr>
-      </ng-template>
-    </p-table>
-  </div>
-
+          </div>
+        </div>
+        
+        <div class="col-12 md:col-6 lg:col-3">
+          <div class="card border-left-4 border-danger h-full">
+            <div class="flex flex-column">
+              <span class="text-xl font-medium mb-3">Failed</span>
+              <span class="text-4xl font-bold">{{dashboardData.by_status?.failed || 0}}</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Fix the average duration card -->
+        <div class="col-12 md:col-6 lg:col-3">
+          <div class="card border-left-4 border-info h-full">
+            <div class="flex flex-column">
+              <span class="text-xl font-medium mb-3">Avg. Duration</span>
+              <span class="text-4xl font-bold">
+                {{ dashboardData.avg_duration_seconds ? 
+                    (dashboardData.avg_duration_seconds < 60 ? 
+                      (dashboardData.avg_duration_seconds | number:'1.1-1') + 's' : 
+                      (dashboardData.avg_duration_seconds / 60 | number:'1.1-1') + 'm'
+                    ) : '0s' 
+                }}
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Charts -->
+        <div class="col-12 md:col-6 lg:col-4">
+          <div class="card">
+            <h5>Operations by Type</h5>
+            <p-chart type="pie" [data]="operationsByTypeData" [options]="{ responsive: true }"></p-chart>
+          </div>
+        </div>
+        
+        <div class="col-12 md:col-6 lg:col-4">
+          <div class="card">
+            <h5>Operations by Status</h5>
+            <p-chart type="pie" [data]="operationsByStatusData" [options]="{ responsive: true }"></p-chart>
+          </div>
+        </div>
+        
+        <div class="col-12 lg:col-4">
+          <div class="card">
+            <h5>Operations by Plan</h5>
+            <div class="overflow-auto" style="max-height: 200px;">
+              <ul class="list-none p-0 m-0">
+                <li *ngFor="let item of dashboardData.by_plan | keyvalue" class="flex align-items-center justify-content-between py-2 border-bottom-1 surface-border">
+                  <span>{{item.key}}</span>
+                  <span class="font-medium">{{item.value}}</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-12">
+          <div class="card">
+            <h5>Operations Over Time</h5>
+            <p-chart type="line" [data]="operationsByDateData" [options]="{ responsive: true }"></p-chart>
+          </div>
+        </div>
+        
+        <!-- Recent Failures -->
+        <div class="col-12" *ngIf="dashboardData.recent_failures?.length > 0">
+          <div class="card">
+            <h5>Recent Failures</h5>
+            <p-table [value]="dashboardData.recent_failures" styleClass="p-datatable-sm">
+              <ng-template pTemplate="header">
+                <tr>
+                  <th>Type</th>
+                  <th>Repository</th>
+                  <th>Plan</th>
+                  <th>Time</th>
+                  <th>Error</th>
+                </tr>
+              </ng-template>
+              <ng-template pTemplate="body" let-failure>
+                <tr>
+                  <td>
+                    <div class="flex align-items-center">
+                      <i [class]="getOperationTypeIcon(failure.type)" class="mr-2"></i>
+                      <span>{{failure.type}}</span>
+                    </div>
+                  </td>
+                  <td>{{failure.repository}}</td>
+                  <td>{{failure.plan}}</td>
+                  <td>{{failure.started_at | date:'short'}}</td>
+                  <td>
+                    <span class="text-overflow-ellipsis" pTooltip="{{failure.error}}">
+                      {{failure.error || 'Unknown error'}}
+                    </span>
+                  </td>
+                </tr>
+              </ng-template>
+            </p-table>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Loading state -->
+      <div *ngIf="!dashboardData" class="flex justify-content-center align-items-center" style="height: 400px;">
+        <p-progressSpinner strokeWidth="4"></p-progressSpinner>
+      </div>
+    </p-tabPanel>
+    
+   
+  
   <!-- Log Details Dialog -->
   <p-dialog [(visible)]="detailsDialogVisible" [modal]="true" [draggable]="false" [resizable]="false" 
-            header="Job Log Details" [style]="{width: '700px'}" [closeOnEscape]="true">
-    <div class="p-fluid" *ngIf="selectedLog">
-      <div class="flex justify-content-between align-items-center mb-3">
-        <h3 class="m-0">{{ selectedLog.operation_type | titlecase }} Operation</h3>
-        <p-tag [severity]="getStatusSeverity(selectedLog.status)" [value]="selectedLog.status | titlecase"></p-tag>
+        header="Job Log Details" [style]="{width: '700px'}" [closeOnEscape]="true" styleClass="dark-dialog">
+<div class="p-fluid" *ngIf="selectedLog">
+  <div class="flex justify-content-between align-items-center mb-3">
+    <h3 class="m-0 text-white">{{ selectedLog.type | titlecase }} Operation</h3>
+    <p-tag [severity]="getStatusSeverity(selectedLog.status)" [value]="selectedLog.status | titlecase"></p-tag>
+  </div>
+  
+  <p-divider></p-divider>
+  
+  <!-- Update the details dialog grid section -->
+  <div class="grid">
+    <div class="col-12 md:col-6">
+      <label class="font-bold block mb-2 text-white">Operation ID</label>
+      <div class="text-white font-mono text-sm" 
+           style="word-break: break-all; line-height: 1.4; max-width: 100%; overflow-wrap: break-word;">
+        {{ selectedLog.id }}
       </div>
-      
-      <p-divider></p-divider>
-      
-      <div class="grid">
-        <div class="col-12 md:col-6">
-          <label class="font-bold block mb-2">Operation ID</label>
-          <div class="text-800">{{ selectedLog.operation_id }}</div>
-        </div>
-        <div class="col-12 md:col-6">
-          <label class="font-bold block mb-2">Status</label>
-          <div class="text-800">{{ selectedLog.status | titlecase }}</div>
-        </div>
-        <div class="col-12 md:col-6">
-          <label class="font-bold block mb-2">Start Time</label>
-          <div class="text-800">{{ formatDate(selectedLog.start_time) }}</div>
-        </div>
-        <div class="col-12 md:col-6">
-          <label class="font-bold block mb-2">End Time</label>
-          <div class="text-800">{{ selectedLog.end_time ? formatDate(selectedLog.end_time) : 'N/A' }}</div>
-        </div>
-        <div class="col-12 md:col-6">
-          <label class="font-bold block mb-2">Duration</label>
-          <div class="text-800">{{ getDuration(selectedLog) }}</div>
-        </div>
-        <div class="col-12 md:col-6" *ngIf="selectedLog.repository_id">
-          <label class="font-bold block mb-2">Repository</label>
-          <div class="text-800">{{ selectedLog.repository_id }}</div>
-        </div>
-      </div>
-      
-      <p-divider></p-divider>
-      
-      <!-- Progress information for running jobs -->
-      <div *ngIf="selectedLog.status === 'running' && selectedLog.stats?.progress !== undefined">
-        <h4 class="mb-2">Progress</h4>
-        <p-progressBar [value]="selectedLog.stats.progress"></p-progressBar>
-        <div class="text-center mt-2">{{ selectedLog.stats.progress }}%</div>
-      </div>
-      
-      <!-- Stats section if available -->
-      <div *ngIf="selectedLog.stats" class="mt-3">
-        <h4 class="mb-2">Operation Statistics</h4>
-        <div class="grid">
-          <div class="col-12 md:col-6" *ngIf="selectedLog.stats.files_processed !== undefined">
-            <label class="font-bold block mb-2">Files Processed</label>
-            <div class="text-800">{{ selectedLog.stats.files_processed }}</div>
+      <small *ngIf="selectedLog.snapshotData" class="text-blue-400">Snapshot ID</small>
+      <small *ngIf="selectedLog.isStructuredOperation" class="text-purple-400">Operation ID</small>
+    </div>
+    <div class="col-12 md:col-6">
+      <label class="font-bold block mb-2 text-white">Status</label>
+      <div class="text-white">{{ selectedLog.status | titlecase }}</div>
+    </div>
+    <div class="col-12 md:col-6">
+      <label class="font-bold block mb-2 text-white">Start Time</label>
+      <div class="text-white">{{ selectedLog.startTime | date:'medium' }}</div>
+    </div>
+    <div class="col-12 md:col-6">
+      <label class="font-bold block mb-2 text-white">Server</label>
+      <div class="text-white font-semibold">{{ selectedLog.hostname || selectedLog.server_name || 'Unknown Server' }}</div>
+      <small *ngIf="selectedLog.repository || selectedLog.repository_name" class="text-500">
+        Repository: {{ selectedLog.repository || selectedLog.repository_name }}
+      </small>
+    </div>
+    <div class="col-12 md:col-6">
+      <label class="font-bold block mb-2 text-white">Plan</label>
+      <div class="text-white">{{ selectedLog.plan || 'N/A' }}</div>
+    </div>
+    <div class="col-12 md:col-6">
+      <label class="font-bold block mb-2 text-white">Log Level</label>
+      <div class="text-white">{{ selectedLog.level || 'N/A' }}</div>
+    </div>
+  </div>
+  
+  <p-divider></p-divider>
+  
+  <!-- Message details with improved styling -->
+  <div class="mt-3">
+    <label class="font-bold block mb-2 text-white">Message</label>
+    <div class="p-3 border-round font-mono text-sm" 
+         style="word-break: break-word; background-color: #1e2329; color: #e0e0e0; border: 1px solid #3f4550;">
+      {{ selectedLog.message || 'No message available' }}
+    </div>
+  </div>
+
+  <!-- Error information if available -->
+  <div *ngIf="selectedLog.error" class="mt-3">
+    <label class="font-bold block mb-2 text-white">Error Details</label>
+    <div class="p-3 border-round font-mono text-sm" 
+         style="word-break: break-word; background-color: #2d1e1e; color: #ff8080; border: 1px solid #5a3a3a;">
+      {{ selectedLog.error }}
+    </div>
+  </div>
+
+  <!-- Add this section inside your details dialog, after the existing content and before the footer -->
+  <div *ngIf="selectedLog && (selectedLog.type === 'backup' || (selectedLog.id && selectedLog.id.includes('backup')))" class="mt-4">
+    <p-divider></p-divider>
+    
+    <h4 class="text-white mb-3">Backup Summary</h4>
+    
+    <div class="grid">
+      <!-- Files section -->
+      <div class="col-12 md:col-4">
+        <div class="p-3 border-round" style="background-color: #1e2329; border: 1px solid #3f4550;">
+          <h5 class="text-white mb-3">Files</h5>
+          <div class="flex justify-content-between mb-2">
+            <span>Total Processed:</span>
+            <span class="font-bold text-white">{{ selectedLog.summary?.total_files_processed | number }}</span>
           </div>
-          <div class="col-12 md:col-6" *ngIf="selectedLog.stats.bytes_processed !== undefined">
-            <label class="font-bold block mb-2">Data Processed</label>
-            <div class="text-800">{{ (selectedLog.stats.bytes_processed / (1024 * 1024)).toFixed(2) }} MB</div>
+          <div class="flex justify-content-between mb-2">
+            <span>Changed:</span>
+            <span class="font-bold text-green-500">{{ selectedLog.summary?.files_changed | number }}</span>
+          </div>
+          <div class="flex justify-content-between">
+            <span>Unchanged:</span>
+            <span class="text-gray-300">{{ selectedLog.summary?.files_unmodified | number }}</span>
           </div>
         </div>
       </div>
       
-      <!-- Error information if available -->
-      <div *ngIf="selectedLog.error" class="mt-3">
-        <h4 class="mb-2">Error Details</h4>
-        <div class="p-3 border-round bg-red-50 text-red-700 font-mono text-sm">
-          {{ selectedLog.error }}
+      <!-- Directories section -->
+      <div class="col-12 md:col-4">
+        <div class="p-3 border-round" style="background-color: #1e2329; border: 1px solid #3f4550;">
+          <h5 class="text-white mb-3">Directories</h5>
+          <div class="flex justify-content-between mb-2">
+            <span>Changed:</span>
+            <span class="font-bold text-green-500">{{ selectedLog.summary?.dirs_changed | number }}</span>
+          </div>
+          <div class="flex justify-content-between mb-2">
+            <span>Unchanged:</span>
+            <span class="text-gray-300">{{ selectedLog.summary?.dirs_unmodified | number }}</span>
+          </div>
+          <div class="flex justify-content-between">
+            <span>Tree Blobs:</span>
+            <span>{{ selectedLog.summary?.tree_blobs | number }}</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Data section -->
+      <div class="col-12 md:col-4">
+        <div class="p-3 border-round" style="background-color: #1e2329; border: 1px solid #3f4550;">
+          <h5 class="text-white mb-3">Data</h5>
+          <div class="flex justify-content-between mb-2">
+            <span>Total Size:</span>
+            <span class="font-bold text-white">{{ (selectedLog.summary?.total_bytes_processed / (1024 * 1024)) | number:'1.2-2' }} MB</span>
+          </div>
+          <div class="flex justify-content-between mb-2">
+            <span>Data Added:</span>
+            <span class="font-bold text-blue-500">{{ (selectedLog.summary?.data_added / 1024) | number:'1.2-2' }} KB</span>
+          </div>
+          <div class="flex justify-content-between">
+            <span>Efficiency:</span>
+            <span class="font-bold text-cyan-400">{{ selectedLog.summary?.efficiency | number:'1.2-2' }}%</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Additional details -->
+      <div class="col-12 mt-3">
+        <div class="p-3 border-round" style="background-color: #1e2329; border: 1px solid #3f4550;">
+          <div class="flex justify-content-between mb-3">
+            <span>Duration:</span>
+            <span class="font-bold text-white">{{ selectedLog.summary?.total_duration | number:'1.2-2' }}s</span>
+          </div>
+          <label class="block mb-2 text-white">Snapshot ID:</label>
+          <div class="p-2 border-round font-mono text-xs" 
+               style="background-color: #151a1f; color: #a0a0a0; word-break: break-all; line-height: 1.3; max-height: 120px; overflow-y: auto;">
+            {{ selectedLog.id || 'Not available' }}
+          </div>
         </div>
       </div>
     </div>
-    
-    <ng-template pTemplate="footer">
-      <button pButton pRipple label="Close" icon="pi pi-times" class="p-button-outlined" (click)="detailsDialogVisible = false"></button>
-    </ng-template>
-  </p-dialog>
-</main>
+  </div>
+
+  <!-- Warning for invalid log data -->
+  <div *ngIf="selectedLog?.invalidLogData" class="p-3 mb-3" style="background-color: #FFF3CD; color: #856404; border-radius: 4px;">
+    <div class="flex align-items-center">
+      <i class="pi pi-exclamation-triangle mr-2"></i>
+      <span>
+        <strong>Warning:</strong> The logs displayed may not match the selected operation. 
+        These logs are from a different date or operation type (showing garbage collection logs instead of backup logs).
+      </span>
+    </div>
+    <div class="mt-2">
+      <button pButton icon="pi pi-sync" label="Retry" 
+        class="p-button-sm p-button-warning" (click)="retryLoadingLogs()"></button>
+    </div>
+  </div>
+
+  <!-- No data available message -->
+  <div *ngIf="selectedLog?.type === 'backup' && (!selectedLog?.summary?.total_bytes_processed || selectedLog?.invalidLogData)" 
+       class="p-3 mt-3 mb-3" style="background-color: #1e2329; border: 1px solid #3f4550; border-radius: 4px;">
+    <div class="text-center">
+      <i class="pi pi-info-circle text-xl mb-2" style="color: #64748B;"></i>
+      <p style="color: #94A3B8;" class="mb-2">No backup summary data is available for this operation.</p>
+      <small style="color: #64748B;">This might happen if the wrong logs were returned from the server.</small>
+    </div>
+  </div>
+</div>
+
+<ng-template pTemplate="footer">
+  <button pButton pRipple label="Close" icon="pi pi-times" class="p-button-outlined" (click)="detailsDialogVisible = false"></button>
+</ng-template>
+</p-dialog>

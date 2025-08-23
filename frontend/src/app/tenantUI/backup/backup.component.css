@@ -1,0 +1,35 @@
+/* Add to your component's styles or global CSS */
+.word-break-all {
+  word-break: break-all;
+}
+
+.max-h-10rem {
+  max-height: 10rem;
+}
+
+.p-dialog .p-dialog-content {
+  padding: 1rem !important;
+}
+
+.p-dialog .p-dialog-header {
+  padding: 1rem !important;
+}
+
+.p-dialog .p-dialog-footer {
+  padding: 1rem !important;
+}
+
+/* Add this to your component's styles */
+:host ::ng-deep .backup-details-dialog .p-dialog {
+  z-index: 2000 !important;
+}
+
+:host ::ng-deep .backup-details-dialog .p-dialog-mask {
+  z-index: 1999 !important;
+}
+
+/* Ensure the dialog content scrolls properly */
+:host ::ng-deep .backup-details-dialog .p-dialog-content {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}

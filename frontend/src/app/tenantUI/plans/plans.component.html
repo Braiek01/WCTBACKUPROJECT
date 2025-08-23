@@ -162,20 +162,40 @@
         <td>
           <p-tag [value]="plan.status" [severity]="plan.statusSeverity"></p-tag>
         </td>
-        <td>
-          <div class="flex gap-2">
-            <button pButton pRipple icon="pi pi-info-circle" class="p-button-rounded p-button-text" 
-                    pTooltip="View Details" (click)="showPlanDetails(plan)"></button>
-            <button pButton pRipple icon="pi pi-pencil" class="p-button-rounded p-button-text" 
-                    pTooltip="Edit Plan" (click)="editPlan(plan)"></button>
-            <button pButton pRipple [icon]="plan.status === 'Active' ? 'pi pi-pause' : 'pi pi-play'" 
-                    class="p-button-rounded p-button-text" 
-                    [pTooltip]="plan.status === 'Active' ? 'Pause Plan' : 'Activate Plan'"
-                    (click)="togglePlanStatus(plan)"></button>
-            <button pButton pRipple icon="pi pi-play" class="p-button-rounded p-button-success p-button-text" 
-                    pTooltip="Execute Now" (click)="executePlanNow(plan)"></button>
-            <button pButton pRipple icon="pi pi-trash" class="p-button-rounded p-button-danger p-button-text" 
-                    pTooltip="Delete Plan" (click)="deletePlan(plan)"></button>
+        <td class="actions-column">
+          <div class="flex gap-1">
+            <!-- View Details Button -->
+            <button pButton pRipple 
+              icon="pi pi-eye" 
+              class="p-button-rounded p-button-text p-button-sm" 
+              pTooltip="View Details"
+              (click)="showPlanDetails(plan)">
+            </button>
+            
+            <!-- Edit Plan Button -->
+            <button pButton pRipple 
+              icon="pi pi-pencil" 
+              class="p-button-rounded p-button-text p-button-sm" 
+              pTooltip="Edit Plan"
+              (click)="editPlan(plan)">
+            </button>
+            
+            <!-- Execute Now Button -->
+            <button pButton pRipple 
+              icon="pi pi-play" 
+              class="p-button-rounded p-button-text p-button-sm p-button-success" 
+              pTooltip="Execute Now"
+              [loading]="plan.executing"
+              (click)="executePlanNow(plan)">
+            </button>
+            
+            <!-- Delete Plan Button -->
+            <button pButton pRipple 
+              icon="pi pi-trash" 
+              class="p-button-rounded p-button-text p-button-sm p-button-danger" 
+              pTooltip="Delete Plan"
+              (click)="deletePlan(plan)">
+            </button>
           </div>
         </td>
       </tr>

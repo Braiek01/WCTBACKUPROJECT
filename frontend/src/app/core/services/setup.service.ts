@@ -559,22 +559,49 @@ export class SetupService {
     console.log('Forcing backend check of setup status');
     this.clearSetupStatusCache(); // Clear cache first
     
+    // Get tenant info and construct the URL with tenant context
+    const tenantName = this.tenantContext.getTenantName();
+    const accessToken = this.tenantContext.getAccessToken();
+    
+    if (!tenantName || !accessToken) {
+      return of({ setupNeeded: false });
+    }
+    
+    // Use the apiService which should handle tenant context properly
     return this.apiService.get('backrest/status/').pipe(
       tap(response => {
-        console.log('Forced setup status check response:', response);
-        // Cache the response with timestamp
-        const statusToCache = {
+        console.log('Backrest setup status check:', response);
+        // Update cache with latest value
+        localStorage.setItem('backrest_setup_status', JSON.stringify({
           ...(typeof response === 'object' && response !== null ? response : {}),
           timestamp: Date.now()
-        };
-        localStorage.setItem('backrest_setup_status', JSON.stringify(statusToCache));
+        }));
       }),
       catchError(error => {
-        console.error('Error in forced setup status check:', error);
-        // On error, set status to need setup
-        const errorStatus = { setupNeeded: true, timestamp: Date.now() };
-        localStorage.setItem('backrest_setup_status', JSON.stringify(errorStatus));
-        return of(errorStatus);
+        console.error('Error checking setup status:', error);
+        
+        // If we get a 500 error and it mentions "relation does not exist"
+        // This indicates database tables haven't been migrated
+        if (error.status === 500 && 
+            (error.error?.detail?.includes('relation') || 
+             error.error?.detail?.includes('does not exist'))) {
+          console.warn('Database tables not migrated - treating as setup needed');
+          
+          // Return a special migration needed response
+          return of({ 
+            setupNeeded: true, 
+            migrationNeeded: true,
+            message: 'Database tables need to be created. Please contact your administrator.',
+            step: 'database_migration'
+          });
+        }
+        
+        // For any other error, assume setup is needed
+        return of({ 
+          setupNeeded: true, 
+          error: true,
+          message: 'Unable to determine setup status'
+        });
       })
     );
   }

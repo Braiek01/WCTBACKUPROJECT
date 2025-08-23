@@ -166,6 +166,7 @@ class BackrestSnapshot(models.Model):
     size_bytes = models.BigIntegerField(null=True, blank=True)
     file_count = models.IntegerField(null=True, blank=True)
     indexed_at = models.DateTimeField(auto_now_add=True)
+    paths = models.JSONField(default=list, blank=True)
     
     def __str__(self):
         return f"Snapshot {self.snapshot_id[:8]} ({self.time})"
@@ -179,12 +180,18 @@ class BackrestOperation(models.Model):
         PRUNE = 'prune', _('Prune')
         FORGET = 'forget', _('Forget')
         CHECK = 'check', _('Check')
+        STATS = 'stats', _('Stats')
+        RESTORE = 'restore', _('Restore')
+        OTHER = 'other', _('Other')
         
     class StatusType(models.TextChoices):
         PENDING = 'pending', _('Pending')
         RUNNING = 'running', _('Running')
         COMPLETED = 'completed', _('Completed')
         FAILED = 'failed', _('Failed')
+        SUCCESS = 'success', _('Success')
+        WARNING = 'warning', _('Warning')
+        CANCELLED = 'cancelled', _('Cancelled')
     
     tenant = models.ForeignKey(TENANT_MODEL, on_delete=models.CASCADE, related_name='backrest_operations')
     operation_id = models.CharField(max_length=255, unique=True)
@@ -206,6 +213,14 @@ class BackrestOperation(models.Model):
     )
     scheduled_at = models.DateTimeField(null=True, blank=True, 
                                        help_text="When this operation is scheduled to run")
+    output = models.TextField(null=True, blank=True)  # Field to store check output
+    
+    # Additional fields for extended functionality
+    backrest_id = models.BigIntegerField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    
+    class Meta:
+        ordering = ['-started_at']
     
     def __str__(self):
         return f"{self.operation_type} operation {self.operation_id[:8]} ({self.status})"
@@ -252,3 +267,92 @@ class BackrestInstance(models.Model):
     
     def __str__(self):
         return f"{self.tenant.name} - {self.instance_id}"
+
+# Add the new Stats model
+class BackrestStats(models.Model):
+    """Model for tracking repository statistics"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(TENANT_MODEL, on_delete=models.CASCADE, related_name='backrest_stats')
+    repository = models.ForeignKey(BackrestRepository, on_delete=models.CASCADE, related_name='stats')
+    total_size = models.BigIntegerField(default=0)
+    total_size_on_disk = models.BigIntegerField(default=0)
+    compression_ratio = models.FloatField(null=True)
+    snapshot_count = models.IntegerField(default=0)
+    data_blobs = models.IntegerField(default=0)
+    tree_blobs = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name_plural = "Backrest statistics"
+        
+    def __str__(self):
+        return f"Stats for {self.repository.name} at {self.created_at}"
+
+class SystemOperation(models.Model):
+    """Track all system operations for activity feed"""
+    
+    OPERATION_TYPES = [
+        ('login', 'User Login'),
+        ('logout', 'User Logout'),
+        ('backup_started', 'Backup Started'),
+        ('backup_completed', 'Backup Completed'),
+        ('backup_failed', 'Backup Failed'),
+        ('restore_started', 'Restore Started'),
+        ('restore_completed', 'Restore Completed'),
+        ('restore_failed', 'Restore Failed'),
+        ('repository_created', 'Repository Created'),
+        ('plan_created', 'Plan Created'),
+        ('maintenance', 'Maintenance Operation'),
+        ('index', 'Index Operation'),
+        ('prune', 'Prune Operation'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('started', 'Started'),
+        ('running', 'Running'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    tenant = models.ForeignKey(
+        settings.TENANT_MODEL,
+        on_delete=models.CASCADE,
+        related_name='system_operations'
+    )
+    
+    operation_type = models.CharField(max_length=50, choices=OPERATION_TYPES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='started')
+    
+    # User who performed the operation (optional for system operations)
+    user = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Related objects (optional)
+    repository = models.ForeignKey(BackrestRepository, on_delete=models.CASCADE, null=True, blank=True)
+    plan = models.ForeignKey(BackrestPlan, on_delete=models.CASCADE, null=True, blank=True)
+    
+    # Operation details
+    description = models.TextField()
+    details = models.JSONField(default=dict, blank=True)
+    
+    # Timestamps
+    started_at = models.DateTimeField(default=timezone.now)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        db_table = 'backrest_system_operations'
+        ordering = ['-started_at']
+        indexes = [
+            models.Index(fields=['tenant', 'operation_type']),
+            models.Index(fields=['started_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.operation_type} - {self.status}"
+    
+    @property
+    def duration(self):
+        if self.completed_at and self.started_at:
+            return self.completed_at - self.started_at
+        return None

@@ -99,93 +99,219 @@
     padding: 2rem;
     overflow: auto;
 ">
-  <!-- Backups Section Header -->
+  <!-- Dashboard Header with Real-time Stats -->
   <div class="flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
-      <h2 class="text-3xl font-bold text-white mb-0">Backups <span class="text-xl text-400 ml-1">({{ backups.length }})</span></h2>
-      <p class="text-400 mt-1">Manage and initiate backups using our system</p>
+      <h2 class="text-3xl font-bold text-white mb-0">
+        Dashboard 
+        <span class="text-xl text-400 ml-1">({{ backupStats.total }} backups)</span>
+      </h2>
+      <p class="text-400 mt-1">
+        Real-time backup monitoring • Last updated: {{ lastRefresh | date:'short' }}
+      </p>
     </div>
-    <div class="flex gap-2">
-      <button pButton pRipple label="Create Repository" (click)="showCreateRepoDialog()" icon="pi pi-database" class="p-button-primary"></button>
-      <button pButton pRipple label="Create Plan" (click)="showCreatePlanDialog()" icon="pi pi-calendar" class="p-button-success"></button>
+    <div class="flex gap-2 align-items-center">
+      <!-- Auto-refresh toggle -->
+      <button pButton pRipple 
+              [label]="autoRefreshEnabled ? 'Auto-refresh ON' : 'Auto-refresh OFF'" 
+              [icon]="autoRefreshEnabled ? 'pi pi-pause' : 'pi pi-play'"
+              [class]="autoRefreshEnabled ? 'p-button-success' : 'p-button-secondary'"
+              class="p-button-sm"
+              (click)="toggleAutoRefresh()">
+      </button>
+      
+      <!-- Manual refresh -->
+      <button pButton pRipple label="Refresh Now" icon="pi pi-refresh" 
+              class="p-button-outlined p-button-sm"
+              (click)="manualRefresh()">
+      </button>
+      
+      <!-- Action buttons -->
+      <button pButton pRipple label="Create Repository" (click)="showCreateRepoDialog()" 
+              icon="pi pi-database" class="p-button-primary"></button>
+      <button pButton pRipple label="Create Plan" (click)="showCreatePlanDialog()" 
+              icon="pi pi-calendar" class="p-button-success"></button>
+    </div>
+  </div>
+
+  <!-- Real-time Stats Cards -->
+  <div class="grid mb-4">
+    <div class="col-12 md:col-3">
+      <div class="surface-card p-3 border-round shadow-2 h-full">
+        <div class="flex justify-content-between align-items-start">
+          <div>
+            <span class="block text-500 font-medium mb-1">Total Backups</span>
+            <div class="text-900 font-medium text-xl">{{ backupStats.total }}</div>
+          </div>
+          <div class="flex align-items-center justify-content-center bg-blue-100 border-round" 
+               style="width:2.5rem;height:2.5rem">
+            <i class="pi pi-database text-blue-500 text-xl"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-12 md:col-3">
+      <div class="surface-card p-3 border-round shadow-2 h-full">
+        <div class="flex justify-content-between align-items-start">
+          <div>
+            <span class="block text-500 font-medium mb-1">Completed</span>
+            <div class="text-900 font-medium text-xl">{{ backupStats.completed }}</div>
+          </div>
+          <div class="flex align-items-center justify-content-center bg-green-100 border-round" 
+               style="width:2.5rem;height:2.5rem">
+            <i class="pi pi-check-circle text-green-500 text-xl"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-12 md:col-3">
+      <div class="surface-card p-3 border-round shadow-2 h-full">
+        <div class="flex justify-content-between align-items-start">
+          <div>
+            <span class="block text-500 font-medium mb-1">Running</span>
+            <div class="text-900 font-medium text-xl">{{ backupStats.running }}</div>
+          </div>
+          <div class="flex align-items-center justify-content-center bg-blue-100 border-round" 
+               style="width:2.5rem;height:2.5rem">
+            <i class="pi pi-spin pi-spinner text-blue-500 text-xl"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-12 md:col-3">
+      <div class="surface-card p-3 border-round shadow-2 h-full">
+        <div class="flex justify-content-between align-items-start">
+          <div>
+            <span class="block text-500 font-medium mb-1">Total Size</span>
+            <div class="text-900 font-medium text-xl">{{ backupStats.totalSize }}</div>
+          </div>
+          <div class="flex align-items-center justify-content-center bg-purple-100 border-round" 
+               style="width:2.5rem;height:2.5rem">
+            <i class="pi pi-chart-pie text-purple-500 text-xl"></i>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
   <div class="grid">
     <!-- Main content area -->
     <div class="col-12 lg:col-8">
-      <!-- Backups Accordion -->
+      <!-- Real-time Backups Accordion -->
       <p-accordion [multiple]="true" [activeIndex]="[0]" styleClass="mb-3">
-        <p-accordionTab *ngFor="let bucket of backups; let i = index" [selected]="i === 0">
+        <p-accordionTab *ngFor="let backup of backups; let i = index" [selected]="i === 0">
           <ng-template pTemplate="header">
             <div class="flex align-items-center justify-content-between w-full">
               <div class="flex align-items-center">
-                <i [class]="bucket.icon + ' mr-2 text-xl'"></i>
-                <span class="font-semibold mr-2">{{ bucket.name }}</span>
-                <p-tag [value]="bucket.status" [severity]="bucket.status === 'Completed' ? 'success' : (bucket.status === 'Running' ? 'info' : 'warn')"></p-tag>
+                <i [class]="backup.icon + ' mr-2 text-xl'"></i>
+                <span class="font-semibold mr-2">{{ backup.name }}</span>
+                <p-tag [value]="backup.status" 
+                       [severity]="backup.status === 'Completed' ? 'success' : 
+                                  (backup.status === 'Running' ? 'info' : 
+                                  (backup.status === 'Failed' ? 'danger' : 'warning'))">
+                </p-tag>
+                
+                <!-- Live indicator for running backups -->
+                <span *ngIf="backup.status === 'Running'" 
+                      class="ml-2 flex align-items-center text-blue-500">
+                  <i class="pi pi-circle-fill text-xs mr-1 pi-spin"></i>
+                  <small>LIVE</small>
+                </span>
               </div>
             </div>
           </ng-template>
           <div class="grid text-sm p-3">
             <div class="col-6 md:col-4 mb-3">
-              <div class="text-500 font-medium mb-1">Created</div>
-              <div class="text-900">{{ bucket.created }}</div>
+              <div class="text-500 font-medium mb-1">Last Backup</div>
+              <div class="text-900">{{ backup.created }}</div>
             </div>
             <div class="col-6 md:col-4 mb-3">
-              <div class="text-500 font-medium mb-1">Type</div>
-              <div class="text-900">{{ bucket.type }}</div>
+              <div class="text-500 font-medium mb-1">Repository</div>
+              <div class="text-900">{{ backup.repository }}</div>
             </div>
             <div class="col-6 md:col-4 mb-3">
               <div class="text-500 font-medium mb-1">Size</div>
-              <div class="text-900">{{ bucket.size }}</div>
+              <div class="text-900">{{ backup.size }}</div>
             </div>
             <div class="col-6 md:col-4 mb-3">
-              <div class="text-500 font-medium mb-1">ID</div>
-              <div class="text-900 font-mono text-xs">{{ bucket.id }}</div>
+              <div class="text-500 font-medium mb-1">Plan</div>
+              <div class="text-900">{{ backup.plan }}</div>
             </div>
             <div class="col-6 md:col-4 mb-3">
-              <div class="text-500 font-medium mb-1">Lifecycle</div>
-              <div class="text-900">{{ bucket.lifecycle }}</div>
+              <div class="text-500 font-medium mb-1">Type</div>
+              <div class="text-900">{{ backup.type }}</div>
             </div>
             <div class="col-6 md:col-4 mb-3">
               <div class="text-500 font-medium mb-1">Encryption</div>
-              <div class="text-900">{{ bucket.encryption }}</div>
+              <div class="text-900">{{ backup.encryption }}</div>
             </div>
           </div>
           <p-divider></p-divider>
           <div class="flex justify-content-end gap-2 p-3 pt-0">
-            <button pButton pRipple label="Details" icon="pi pi-info-circle" class="p-button-text p-button-secondary"></button>
-            <button pButton pRipple label="Restore" icon="pi pi-undo" class="p-button-outlined p-button-secondary"></button>
+            <button pButton pRipple label="Details" icon="pi pi-info-circle" 
+                    class="p-button-text p-button-secondary"></button>
+            <button pButton pRipple label="Restore" icon="pi pi-undo" 
+                    class="p-button-outlined p-button-secondary"
+                    [routerLink]="['/', tenantName, 'restore']"></button>
           </div>
         </p-accordionTab>
       </p-accordion>
       
-      <!-- Chart Section -->
+      <!-- Real-time Chart Section -->
       <div class="surface-card p-4 border-round shadow-2">
-        <h3 class="text-xl font-semibold mb-3">Backup Overview</h3>
+        <div class="flex justify-content-between align-items-center mb-3">
+          <h3 class="text-xl font-semibold">Backup Trends</h3>
+          <span class="text-sm text-500">Updates every 30 seconds</span>
+        </div>
         <p-chart type="line" [data]="chartData" [options]="chartOptions" height="300px"></p-chart>
       </div>
     </div>
 
-    <!-- Right sidebar -->
+    <!-- Enhanced Right sidebar with live activity -->
     <div class="col-12 lg:col-4">
       <div class="surface-card p-4 border-round shadow-2">
         <div class="flex justify-content-between align-items-center mb-3">
-          <span class="text-xl font-semibold">Recent Activity</span>
+          <span class="text-xl font-semibold">Live Activity</span>
+          <div class="flex align-items-center gap-2">
+            <span *ngIf="activityLoading" class="pi pi-spin pi-spinner text-blue-500"></span>
+            <span class="text-xs text-500">Updates every 10s</span>
+          </div>
         </div>
+        
+        <!-- Live activity timeline -->
         <p-timeline [value]="recentActions" align="left" styleClass="recent-actions-timeline">
           <ng-template pTemplate="marker" let-event>
-            <span class="custom-marker shadow-2 flex align-items-center justify-content-center" [style.backgroundColor]="event.color">
+            <span class="custom-marker shadow-2 flex align-items-center justify-content-center" 
+                  [style.backgroundColor]="event.color">
               <i [class]="event.icon + ' text-sm'"></i>
             </span>
           </ng-template>
           <ng-template pTemplate="content" let-event>
             <div class="ml-2">
               <div class="text-sm font-semibold mb-1">{{event.description}}</div>
-              <div class="text-xs text-500">{{event.date}} <span *ngIf="event.by">by {{event.by}}</span></div>
+              <div class="text-xs text-500">
+                {{event.date}} 
+                <span *ngIf="event.by">by {{event.by}}</span>
+                <span *ngIf="event.status === 'running'" 
+                      class="ml-2 text-blue-500 font-medium">
+                  • LIVE
+                </span>
+              </div>
             </div>
           </ng-template>
         </p-timeline>
+        
+        <!-- Activity summary -->
+        <div class="mt-4 pt-3 border-top-1 surface-border">
+          <div class="text-sm text-500 mb-2">Last 24 hours</div>
+          <div class="flex justify-content-between text-sm">
+            <span>Completed: <strong class="text-green-500">{{ backupStats.completed }}</strong></span>
+            <span>Failed: <strong class="text-red-500">{{ backupStats.failed }}</strong></span>
+          </div>
+        </div>
       </div>
     </div>
   </div>

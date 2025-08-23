@@ -8,6 +8,7 @@ import Aura from '@primeng/themes/aura';
 
 import { routes } from './app.routes';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
+import { BackrestService } from './core/services/backrest.service';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -17,6 +18,7 @@ export const appConfig: ApplicationConfig = {
     providePrimeNG({ theme:{ preset: Aura }}),
     // Add withFetch() alongside your existing interceptor
     provideHttpClient(withInterceptors([authInterceptor]), withFetch()),
-    MessageService
+    MessageService,
+    BackrestService
   ]
 };

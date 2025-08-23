@@ -4,6 +4,8 @@ import json
 import logging
 from urllib.parse import urlparse
 import bcrypt  # Import bcrypt for password hashing
+import time
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -27,21 +29,41 @@ class BackrestService:
         if hasattr(self, 'token') and self.token and auth_required:
             headers['Authorization'] = f"Bearer {self.token}"
         
+        # ENHANCED LOGGING: Log the exact data being sent
+        if data:
+            logger.info(f"Request data type: {type(data)}")
+            logger.info(f"Full request payload: {json.dumps(data, indent=2)}")
+            
+            # CRITICAL DEBUG: Check if repo field is empty
+            if isinstance(data, dict) and 'repo' in data:
+                logger.info(f"REPO FIELD VALUE: '{data['repo']}' (type: {type(data['repo'])}, length: {len(str(data['repo']))})")
+                if not data['repo'] or str(data['repo']).strip() == "":
+                    logger.error("❌ REPO FIELD IS EMPTY! This is the source of the error!")
+            else:
+                logger.info("No 'repo' field found in data")
+        
         try:
             if method.lower() == 'get':
                 response = requests.get(url, headers=headers, timeout=30)
             elif method.lower() == 'post':
-                # Log exact payload being sent
-                logger.info(f"Request payload: {json.dumps(data)[:1000]}...")  # Limit for logs
+                # Log the exact JSON string being sent
+                json_payload = json.dumps(data) if data else "{}"
+                logger.info(f"Exact JSON being sent: {json_payload}")
+                
                 response = requests.post(url, json=data, headers=headers, timeout=30)
             else:
                 raise ValueError(f"Unsupported HTTP method: {method}")
             
             # Log response details regardless of status
             logger.info(f"Response status: {response.status_code}")
+            logger.info(f"Response headers: {dict(response.headers)}")
             
             if response.status_code >= 400:
                 logger.error(f"Error response body: {response.text}")
+            else:
+                # Log successful response (truncated)
+                response_text = response.text[:500] + "..." if len(response.text) > 500 else response.text
+                logger.info(f"Success response: {response_text}")
             
             response.raise_for_status()
             return response.json()
@@ -128,12 +150,21 @@ class BackrestService:
                 "paths": paths,
                 "excludes": excludes,
                 "iexcludes": [],
-                "hooks": []
+                "hooks": [],
+                "backup_flags": backup_flags or []
             }
             
-            # Fix the schedule format
-            if schedule:
-                # Check if schedule is a string or dictionary
+            # Process schedule correctly - CHECK FOR DISABLED FIRST
+            logger.info(f"Processing schedule: {schedule}")
+            
+            if schedule and isinstance(schedule, dict) and schedule.get('disabled') == True:
+                # Handle explicitly disabled schedule
+                logger.info("Setting DISABLED schedule")
+                backup_plan["schedule"] = {
+                    "disabled": True
+                }
+            elif schedule:
+                # Process enabled schedule
                 if isinstance(schedule, str):
                     # For string format (e.g. "0 1 * * 1")
                     cleaned_schedule = schedule.strip()
@@ -143,70 +174,96 @@ class BackrestService:
                     }
                     logger.info(f"Adding schedule from string: '{cleaned_schedule}'")
                 elif isinstance(schedule, dict):
-                    # For dictionary format (likely already formatted)
-                    # Make sure we have required fields
+                    # For dictionary format with non-disabled schedule
                     backup_plan["schedule"] = {
-                        "clock": schedule.get("clock", "CLOCK_LOCAL"),
-                        "cron": schedule.get("cron", "0 1 * * 1")  # Default to weekly backup if missing
+                        "clock": schedule.get("clock", "CLOCK_LOCAL")
                     }
-                    logger.info(f"Adding schedule from dictionary: {backup_plan['schedule']}")
+                    
+                    # Only add cron if not disabled
+                    if "cron" in schedule:
+                        backup_plan["schedule"]["cron"] = schedule["cron"]
+                    elif not schedule.get("disabled"):
+                        # Only set default if not disabled
+                        backup_plan["schedule"]["cron"] = "0 1 * * 1"  # Default weekly
                 else:
                     # Unexpected type
-                    logger.warning(f"Unexpected schedule type: {type(schedule)}. Using default.")
+                    logger.warning(f"Unexpected schedule type: {type(schedule)}. Using default disabled.")
                     backup_plan["schedule"] = {
                         "disabled": True
                     }
             else:
+                # No schedule provided - disable by default
                 backup_plan["schedule"] = {
                     "disabled": True
                 }
             
-            # Fix retention policy format to ensure it's always valid
-            retention = {
-                "yearly": 0,
-                "monthly": 0,
-                "weekly": 0,
-                "daily": 0,
-                "hourly": 0,
-                "keepLastN": 7  # Default
-            }
+            # Process retention policy correctly - FIX THE POLICYKEEPALL CHECK
+            logger.info(f"Processing retention policy: {retention_policy}")
             
-            # If retention policy provided, update only the fields that exist
             if retention_policy:
-                if 'keep_last' in retention_policy and retention_policy['keep_last']:
-                    retention["keepLastN"] = int(retention_policy['keep_last'])
-                if 'keep_hourly' in retention_policy and retention_policy['keep_hourly']:
-                    retention["hourly"] = int(retention_policy['keep_hourly'])
-                if 'keep_daily' in retention_policy and retention_policy['keep_daily']:
-                    retention["daily"] = int(retention_policy['keep_daily'])
-                if 'keep_weekly' in retention_policy and retention_policy['keep_weekly']:
-                    retention["weekly"] = int(retention_policy['keep_weekly'])
-                if 'keep_monthly' in retention_policy and retention_policy['keep_monthly']:
-                    retention["monthly"] = int(retention_policy['keep_monthly'])
-                if 'keep_yearly' in retention_policy and retention_policy['keep_yearly']:
-                    retention["yearly"] = int(retention_policy['keep_yearly'])
-            
-            backup_plan["retention"] = {
-                "policyTimeBucketed": retention
-            }
-            
-            # Format backup flags properly
-            if backup_flags:
-                formatted_flags = []
-                i = 0
-                while i < len(backup_flags):
-                    if i+1 < len(backup_flags) and backup_flags[i].startswith('--'):
-                        formatted_flags.append(f'{backup_flags[i]} "{backup_flags[i+1]}"')
-                        i += 2
-                    else:
-                        formatted_flags.append(backup_flags[i])
-                        i += 1
-            
-                backup_plan["backup_flags"] = formatted_flags
+                # First check for policyKeepAll (from frontend)
+                if 'policyKeepAll' in retention_policy and retention_policy['policyKeepAll'] is True:
+                    logger.info("Setting 'policyKeepAll' retention policy")
+                    backup_plan["retention"] = {
+                        "policyKeepAll": True
+                    }
+                # Then check for keep_all (alternative format)
+                elif 'keep_all' in retention_policy and retention_policy['keep_all']:
+                    logger.info("Setting 'keep_all' retention policy")
+                    backup_plan["retention"] = {
+                        "policyKeepAll": True
+                    }
+                # Finally check for other policy types
+                elif 'policyKeepLastN' in retention_policy:
+                    backup_plan["retention"] = {
+                        "policyKeepLastN": int(retention_policy['policyKeepLastN'])
+                    }
+                elif 'keep_last' in retention_policy and retention_policy['keep_last']:
+                    backup_plan["retention"] = {
+                        "policyKeepLastN": int(retention_policy['keep_last'])
+                    }
+                elif 'policyTimeBucketed' in retention_policy:
+                    backup_plan["retention"] = {
+                        "policyTimeBucketed": retention_policy['policyTimeBucketed']
+                    }
+                else:
+                    # Time bucketed with individual fields
+                    retention = {
+                        "yearly": 0,
+                        "monthly": 0,
+                        "weekly": 0,
+                        "daily": 0,
+                        "hourly": 0,
+                        "keepLastN": 7  # Default
+                    }
+                    
+                    # Map field names from different formats
+                    field_mapping = {
+                        'keep_last': 'keepLastN',
+                        'keep_hourly': 'hourly',
+                        'keep_daily': 'daily',
+                        'keep_weekly': 'weekly',
+                        'keep_monthly': 'monthly',
+                        'keep_yearly': 'yearly'
+                    }
+                    
+                    # Process all possible field name formats
+                    for django_field, backrest_field in field_mapping.items():
+                        if django_field in retention_policy and retention_policy[django_field]:
+                            retention[backrest_field] = int(retention_policy[django_field])
+                    
+                    backup_plan["retention"] = {
+                        "policyTimeBucketed": retention
+                    }
             else:
-                backup_plan["backup_flags"] = []
+                # No retention policy provided - use policyKeepAll as default
+                backup_plan["retention"] = {
+                    "policyKeepAll": True
+                }
             
-            # Rest of your existing code...
+            # LOG THE EXACT PLAN BEING CREATED FOR DEBUGGING
+            logger.info(f"FINAL PLAN CONFIGURATION: {json.dumps(backup_plan, indent=2)}")
+            
             # Ensure plans is initialized as an array
             if "plans" not in current_config:
                 current_config["plans"] = []
@@ -223,19 +280,95 @@ class BackrestService:
             else:
                 current_config["plans"].append(backup_plan)
             
-            # Log the FULL plan structure for debugging
-            logger.info(f"Sending plan to Backrest: {json.dumps(backup_plan)}")
-            
-            # Before sending, log the exact structure being sent
-            logger.info(f"Final plan structure: {json.dumps(backup_plan, indent=2)}")
-            logger.info(f"Full config excerpt: {json.dumps(current_config)[:500]}...")
-            
             # Send updated configuration
             response = self._make_request('post', '/v1.Backrest/SetConfig', current_config)
             return {"id": plan_id, "response": response}
         
         except Exception as e:
             logger.exception(f"Failed to create plan: {str(e)}")
+            raise
+    
+    def update_plan(self, plan_id, repository_id, name, paths, excludes=None, schedule=None, retention_policy=None, backup_flags=None):
+        """Update an existing backup plan in Backrest"""
+        if excludes is None:
+            excludes = []
+        
+        try:
+            # Get current configuration to preserve modno and find the plan
+            current_config = self.get_config()
+            logger.info(f"Updating plan {plan_id} in config with modno={current_config.get('modno')}")
+            
+            # Find the plan to update
+            if "plans" not in current_config:
+                raise Exception(f"No plans found in configuration")
+            
+            plan_index = None
+            for i, plan in enumerate(current_config["plans"]):
+                if isinstance(plan, dict) and plan.get("id") == plan_id:
+                    plan_index = i
+                    break
+            
+            if plan_index is None:
+                raise Exception(f"Plan {plan_id} not found in configuration")
+            
+            # Create updated plan structure
+            updated_plan = {
+                "id": plan_id,
+                "repo": repository_id,
+                "paths": paths,
+                "excludes": excludes,
+                "iexcludes": [],
+                "hooks": [],
+                "backup_flags": backup_flags or []
+            }
+            
+            # Process schedule
+            if schedule and isinstance(schedule, dict) and schedule.get('disabled') != True:
+                if isinstance(schedule.get('cron'), str):
+                    updated_plan["schedule"] = {
+                        "clock": schedule.get("clock", "CLOCK_LOCAL"),
+                        "cron": schedule["cron"]
+                    }
+                else:
+                    updated_plan["schedule"] = {"disabled": True}
+            else:
+                updated_plan["schedule"] = {"disabled": True}
+            
+            # Process retention policy
+            if retention_policy:
+                if retention_policy.get('policyKeepAll'):
+                    updated_plan["retention"] = {"policyKeepAll": True}
+                elif retention_policy.get('keep_all'):
+                    updated_plan["retention"] = {"policyKeepAll": True}
+                elif retention_policy.get('policyKeepLastN'):
+                    updated_plan["retention"] = {"policyKeepLastN": int(retention_policy['policyKeepLastN'])}
+                elif retention_policy.get('keep_last'):
+                    updated_plan["retention"] = {"policyKeepLastN": int(retention_policy['keep_last'])}
+                else:
+                    # Time bucketed retention
+                    retention = {
+                        "yearly": int(retention_policy.get('keep_yearly', 0)),
+                        "monthly": int(retention_policy.get('keep_monthly', 0)),
+                        "weekly": int(retention_policy.get('keep_weekly', 0)),
+                        "daily": int(retention_policy.get('keep_daily', 0)),
+                        "hourly": int(retention_policy.get('keep_hourly', 0)),
+                        "keepLastN": int(retention_policy.get('keep_last', 7))
+                    }
+                    updated_plan["retention"] = {"policyTimeBucketed": retention}
+            else:
+                updated_plan["retention"] = {"policyKeepAll": True}
+            
+            logger.info(f"Updated plan configuration: {json.dumps(updated_plan, indent=2)}")
+            
+            # Replace the plan in the configuration
+            current_config["plans"][plan_index] = updated_plan
+            
+            # Send updated configuration to Backrest
+            response = self._make_request('post', '/v1.Backrest/SetConfig', current_config)
+            return {"id": plan_id, "response": response}
+        
+        except Exception as e:
+            logger.exception(f"Failed to update plan {plan_id}: {str(e)}")
             raise
     
     def _format_schedule(self, schedule):
@@ -411,20 +544,22 @@ class BackrestService:
             current_config["auth"] = {}
         
         if users is not None:
-            # Ensure all passwords are properly hashed
+            # FIXED: Don't double-hash passwords
             for user in users:
+                # Check if password needs hashing
                 if user.get("needsBcrypt") == True:
-                    # This means password needs to be hashed before sending
+                    # Hash the password
                     password = user.get("passwordBcrypt", "")
                     user["passwordBcrypt"] = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
                     user["needsBcrypt"] = False
+                # If needsBcrypt is False, password is already hashed - don't touch it
             
             current_config["auth"]["users"] = users
         
         current_config["auth"]["disabled"] = disable_auth
         
         return self._make_request('post', endpoint, current_config)
-    
+
     def get_config(self):
         """Get the current Backrest configuration"""
         logger.info(f"Getting Backrest configuration")
@@ -472,4 +607,125 @@ class BackrestService:
             return response
         except Exception as e:
             logger.error(f"Authentication failed: {str(e)}")
+            raise
+    
+    def get_ssh_client(server):
+        """Create an SSH client for a server"""
+        import paramiko
+        import tempfile
+        import os
+        
+        try:
+            # Create SSH client
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            
+            # Get SSH key
+            key_obj = server.ssh_key
+            if not key_obj:
+                logger.error(f"No SSH key configured for server {server.hostname}")
+                return None
+                
+            # Create temporary key file
+            temp_dir = tempfile.mkdtemp()
+            key_path = os.path.join(temp_dir, 'id_rsa')
+            with open(key_path, 'w') as f:
+                f.write(key_obj.private_key)
+            os.chmod(key_path, 0o600)
+            
+            # Connect to server
+            client.connect(
+                server.hostname,
+                port=server.port,
+                username=server.username,
+                key_filename=key_path,
+                timeout=10
+            )
+            
+            return client
+        except Exception as e:
+            logger.error(f"Error connecting to server {server.hostname}: {str(e)}")
+            return None
+    
+    def check_repository(self, repo_id):
+        """
+        Perform an integrity check on the repository
+        
+        Args:
+            repo_id: The ID of the repository to check
+        
+        Returns:
+            dict: Response containing status and output
+        """
+        try:
+            # Create request payload
+            payload = {
+                "repo_id": repo_id,
+                "task": 3  # TASK_CHECK = 3 from the DoRepoTaskRequest.Task enum
+            }
+            
+            # Call the DoRepoTask endpoint
+            response = self.client.post("/v1/DoRepoTask", json=payload)
+            response.raise_for_status()
+            
+            # Get the operation ID from the response
+            operation_id = response.json().get("id")
+            
+            if not operation_id:
+                return {
+                    "status": "error",
+                    "output": "No operation ID returned from Backrest API"
+                }
+            
+            # Poll for operation completion (this could be improved with a WebSocket listener)
+            for _ in range(30):  # Wait for up to 5 minutes (30 * 10 seconds)
+                time.sleep(10)
+                
+                # Get operation status
+                operation = self.get_operation(operation_id)
+                
+                if operation.get("status") in ["completed", "success", "error", "failed"]:
+                    # Get operation logs
+                    logs_response = self.client.get(f"/v1/GetLogs?ref={operation.get('logref')}")
+                    logs = logs_response.text if logs_response.ok else "No logs available"
+                    
+                    return {
+                        "status": "success" if operation.get("status") in ["completed", "success"] else "error",
+                        "output": logs
+                    }
+            
+            return {
+                "status": "timeout",
+                "output": "Operation timed out"
+            }
+        except Exception as e:
+            logger.exception(f"Error checking repository {repo_id}: {str(e)}")
+            return {
+                "status": "error",
+                "output": f"Error checking repository: {str(e)}"
+            }
+    
+    def list_snapshot_files(self, repo_id, snapshot_id, path='/'):
+        """List files in a snapshot with proper error handling"""
+        logger.info(f"Listing files for repo: {repo_id}, snapshot: {snapshot_id}, path: {path}")
+        
+        if not repo_id or not snapshot_id:
+            raise ValueError("Both repo_id and snapshot_id are required")
+        
+        endpoint = "/v1.Backrest/ListSnapshotFiles"
+        
+        # FIXED: Proper request format for Backrest API
+        request_data = {
+            "repoId": repo_id,  # Make sure this is the string repo ID like "testing"
+            "snapshotId": snapshot_id,
+            "path": path
+        }
+        
+        logger.info(f"Calling {endpoint} with data: {request_data}")
+        
+        try:
+            response = self._make_request('post', endpoint, request_data)
+            return response
+        except Exception as e:
+            logger.error(f"Failed to list snapshot files: {str(e)}")
             raise

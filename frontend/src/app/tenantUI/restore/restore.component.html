@@ -78,9 +78,9 @@
         </a>
       </li>
       <li>
-        <a [routerLink]="['/', tenantName, 'settings']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
-          <i class="pi pi-cog mr-2"></i>
-          <span>Settings</span>
+        <a [routerLink]="['/', tenantName, 'analytics']" class="flex align-items-center px-4 py-3 text-white hover:bg-blue-600 border-none border-round-sm my-1">
+          <i class="pi pi-chart-line mr-2"></i>
+          <span>Analytics</span>
         </a>
       </li>
     </ul>
@@ -233,6 +233,19 @@
     </div>
   </div>
   
+  <!-- Add this temporarily after the filters section for debugging -->
+  <div class="mb-4 p-3 bg-yellow-900 border-round" *ngIf="!loading">
+    <h4>Debug Info</h4>
+    <p>Total snapshots loaded: {{ snapshots.length }}</p>
+    <p>Filtered snapshots: {{ filteredSnapshots.length }}</p>
+    <p>Repositories: {{ repositories.length }}</p>
+    <p>Loading state: {{ loading }}</p>
+    <div *ngIf="snapshots.length > 0">
+      <p>Sample snapshot:</p>
+      <pre>{{ snapshots[0] | json }}</pre>
+    </div>
+  </div>
+  
   <!-- Snapshots Table -->
   <p-table [value]="filteredSnapshots" 
           [loading]="loading"
@@ -244,7 +257,7 @@
         <th>Date</th>
         <th>Repository</th>
         <th>Size</th>
-        <th>Files</th>
+
         <th>Tags</th>
         <th style="width: 10rem">Actions</th>
       </tr>
@@ -256,16 +269,13 @@
           <span class="font-monospace text-sm">{{ snapshot.snapshot_id || snapshot.id }}</span>
         </td>
         <td>
-          <span>{{ formatDate(snapshot.time) }}</span>
+          <span>{{ formatDate({unixTimeMs: snapshot.unixTimeMs}) }}</span>
         </td>
         <td>
           <span>{{ getRepositoryName(snapshot.repository) }}</span>
         </td>
         <td>
           <span>{{ getSnapshotSize(snapshot) }}</span>
-        </td>
-        <td>
-          <span>{{ snapshot.file_count || (snapshot.summary && snapshot.summary.totalFileCount) || 'N/A' }}</span>
         </td>
         <td>
           <div class="flex flex-wrap gap-1">
@@ -277,19 +287,22 @@
           </div>
         </td>
         <td>
-          <button pButton type="button" 
-                  icon="pi pi-replay" 
-                  class="p-button-success p-button-sm mr-2"
-                  pTooltip="Restore from this snapshot"
-                  tooltipPosition="top"
-                  (click)="showRestoreDialog(snapshot)">
-          </button>
-          <button pButton type="button" 
-                  icon="pi pi-info-circle" 
-                  class="p-button-info p-button-sm"
-                  pTooltip="View Details"
-                  tooltipPosition="top">
-          </button>
+          <div class="flex gap-1">
+            <button pButton type="button" 
+                    icon="pi pi-search" 
+                    class="p-button-info p-button-sm"
+                    pTooltip="Browse Files"
+                    tooltipPosition="top"
+                    (click)="showFileBrowser(snapshot)">
+            </button>
+            <button pButton type="button" 
+                    icon="pi pi-replay" 
+                    class="p-button-success p-button-sm"
+                    pTooltip="Restore Entire Snapshot"
+                    tooltipPosition="top"
+                    (click)="restoreEntireSnapshot(snapshot)">
+            </button>
+          </div>
         </td>
       </tr>
     </ng-template>
@@ -297,10 +310,19 @@
     <ng-template pTemplate="emptymessage">
       <tr>
         <td colspan="7" class="text-center p-4">
-          <div class="flex flex-column align-items-center">
+          <div *ngIf="loading" class="flex flex-column align-items-center">
+            <i class="pi pi-spin pi-spinner text-4xl mb-3"></i>
+            <span class="text-xl font-semibold mb-2">Loading snapshots...</span>
+          </div>
+          <div *ngIf="!loading && filteredSnapshots.length === 0 && snapshots.length > 0" class="flex flex-column align-items-center">
+            <i class="pi pi-filter text-4xl mb-3 text-500"></i>
+            <span class="text-xl font-semibold mb-2">No snapshots match your filters</span>
+            <span class="text-500">Try adjusting your filter criteria.</span>
+          </div>
+          <div *ngIf="!loading && snapshots.length === 0" class="flex flex-column align-items-center">
             <i class="pi pi-folder-open text-4xl mb-3 text-500"></i>
             <span class="text-xl font-semibold mb-2">No snapshots found</span>
-            <span class="text-500">Create a backup first or adjust your filters.</span>
+            <span class="text-500">Create a backup first or check your repository configuration.</span>
           </div>
         </td>
       </tr>
@@ -415,5 +437,173 @@
             [loading]="restoreInProgress"
             (click)="initiateRestore()">
     </button>
+  </ng-template>
+</p-dialog>
+
+<!-- File Browser Dialog -->
+<p-dialog [(visible)]="fileBrowserVisible" 
+        [modal]="true"
+        [header]="'Browse Snapshot Files'"
+        [style]="{width: '90vw', height: '80vh'}"
+        [maximizable]="true"
+        styleClass="file-browser-dialog">
+  
+  <div *ngIf="selectedSnapshotForBrowsing" class="h-full flex flex-column">
+    
+    <!-- Header Info -->
+    <div class="mb-3 p-3 surface-100 border-round">
+      <div class="grid">
+        <div class="col-12 md:col-6">
+          <span class="block text-500 font-medium">Snapshot ID:</span>
+          <span class="font-monospace text-sm">{{ selectedSnapshotForBrowsing.snapshot_id || selectedSnapshotForBrowsing.id }}</span>
+        </div>
+        <div class="col-12 md:col-6">
+          <span class="block text-500 font-medium">Date:</span>
+          <span>{{ formatDate(selectedSnapshotForBrowsing.time) }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <div class="flex align-items-center justify-content-between mb-3 p-2 surface-50 border-round">
+      <!-- Breadcrumb Navigation -->
+      <div class="flex align-items-center">
+        <button pButton type="button" 
+                icon="pi pi-arrow-up" 
+                class="p-button-sm p-button-outlined mr-2"
+                [disabled]="currentPath === '/'"
+                (click)="navigateUp()"
+                pTooltip="Go Up">
+        </button>
+        
+        <nav class="flex align-items-center">
+          <span *ngFor="let part of getBreadcrumbParts(); let i = index" class="flex align-items-center">
+            <button *ngIf="i > 0" 
+                    class="p-link font-medium text-primary cursor-pointer"
+                    (click)="navigateToPath(getBreadcrumbPath(i))">
+              {{ part }}
+            </button>
+            <span *ngIf="i === 0" class="font-medium">{{ part }}</span>
+            <i *ngIf="i < getBreadcrumbParts().length - 1" class="pi pi-angle-right mx-1 text-500"></i>
+          </span>
+        </nav>
+      </div>
+      
+      <!-- Selection Info -->
+      <div class="flex align-items-center gap-2">
+        <span class="text-sm text-500">{{ selectedFiles.length }} files selected</span>
+        <button pButton type="button" 
+                label="Clear Selection" 
+                icon="pi pi-times"
+                class="p-button-sm p-button-outlined"
+                (click)="clearFileSelection()"
+                [disabled]="selectedFiles.length === 0">
+        </button>
+      </div>
+    </div>
+
+    <!-- File List -->
+    <div class="flex-1 overflow-auto">
+      <p-table [value]="currentSnapshotFiles" 
+              [loading]="loadingFiles"
+              styleClass="p-datatable-sm"
+              [rowHover]="true"
+              scrollable="true"
+              scrollHeight="flex">
+        
+        <ng-template pTemplate="header">
+          <tr>
+            <th style="width: 3rem">
+              <p-checkbox [(ngModel)]="selectAllFiles" 
+                         [binary]="true"
+                         (onChange)="toggleSelectAll()">
+              </p-checkbox>
+            </th>
+            <th>Name</th>
+            <th style="width: 8rem">Type</th>
+            <th style="width: 8rem">Size</th>
+            <th style="width: 12rem">Modified</th>
+            <th style="width: 5rem">Actions</th>
+          </tr>
+        </ng-template>
+        
+        <ng-template pTemplate="body" let-entry>
+          <tr [class.selected-row]="entry.selected">
+            <td>
+              <p-checkbox [(ngModel)]="entry.selected" 
+                         [binary]="true"
+                         (onChange)="toggleFileSelection(entry)">
+              </p-checkbox>
+            </td>
+            <td>
+              <div class="flex align-items-center cursor-pointer" 
+                   (click)="entry.isDirectory ? navigateToDirectory(entry) : toggleFileSelection(entry)">
+                <i [class]="getFileIcon(entry)" class="mr-2 text-lg"></i>
+                <span class="font-medium">{{ entry.name }}</span>
+              </div>
+            </td>
+            <td>
+              <p-tag [value]="entry.isDirectory ? 'Directory' : 'File'" 
+                    [severity]="entry.isDirectory ? 'info' : 'secondary'"
+                    class="text-xs">
+              </p-tag>
+            </td>
+            <td>
+              <span>{{ entry.isDirectory ? '-' : entry.displaySize }}</span>
+            </td>
+            <td>
+              <span class="text-sm">{{ entry.displayDate }}</span>
+            </td>
+            <td>
+              <button *ngIf="entry.isDirectory" 
+                      pButton type="button" 
+                      icon="pi pi-folder-open" 
+                      class="p-button-sm p-button-text"
+                      pTooltip="Open Directory"
+                      (click)="navigateToDirectory(entry)">
+              </button>
+            </td>
+          </tr>
+        </ng-template>
+        
+        <ng-template pTemplate="emptymessage">
+          <tr>
+            <td colspan="6" class="text-center p-4">
+              <div *ngIf="loadingFiles" class="flex flex-column align-items-center">
+                <i class="pi pi-spin pi-spinner text-2xl mb-2"></i>
+                <span>Loading files...</span>
+              </div>
+              <div *ngIf="!loadingFiles" class="flex flex-column align-items-center">
+                <i class="pi pi-folder-open text-4xl mb-3 text-500"></i>
+                <span class="text-xl font-semibold mb-2">Directory is empty</span>
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </div>
+  </div>
+  
+  <ng-template pTemplate="footer">
+    <div class="flex justify-content-between align-items-center w-full">
+      <div>
+        <span class="text-sm text-500">{{ selectedFiles.length }} files selected</span>
+      </div>
+      <div class="flex gap-2">
+        <button pButton type="button" 
+                label="Cancel" 
+                icon="pi pi-times" 
+                class="p-button-outlined"
+                (click)="fileBrowserVisible = false">
+        </button>
+        <button pButton type="button" 
+                label="Restore Selected" 
+                icon="pi pi-replay" 
+                class="p-button-success"
+                [disabled]="selectedFiles.length === 0"
+                (click)="restoreSelectedFiles()">
+        </button>
+      </div>
+    </div>
   </ng-template>
 </p-dialog>

@@ -113,6 +113,12 @@
       
       <button pButton pRipple label="Refresh" icon="pi pi-refresh" 
               class="p-button-outlined" (click)="loadAnalyticsData()"></button>
+      <!--button pButton pRipple label="Test API" icon="pi pi-cog" 
+              class="p-button-outlined p-button-warning ml-2" 
+              (click)="testApiDirectly()"></button>
+      <button pButton pRipple label="Sync Data" icon="pi pi-sync" 
+              class="p-button-outlined p-button-success ml-2"
+              (click)="syncBackrestData()"></button-->
     </div>
   </div>
   
@@ -264,56 +270,196 @@
         </div>
       </div>
     </p-tabPanel>
-  </p-tabView>
-  
-  <!-- Repository Health -->
-  <div class="card">
-    <div class="flex align-items-center justify-content-between mb-3">
-      <h3 class="m-0">Repository Health</h3>
-      <span class="p-input-icon-left">
-        <i class="pi pi-search"></i>
-        <input type="text" pInputText placeholder="Search repositories..." />
-      </span>
-    </div>
     
-    <p-table [value]="repositories" [loading]="loadingRepositoryHealth" 
-            styleClass="p-datatable-sm" [paginator]="true" [rows]="5">
-      <ng-template pTemplate="header">
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Health</th>
-          <th>Last Check</th>
-          <th>Storage Used</th>
-          <th>Backups</th>
-          <th>Integrity</th>
-        </tr>
-      </ng-template>
-      <ng-template pTemplate="body" let-repo>
-        <tr>
-          <td>{{ repo.name }}</td>
-          <td>{{ repo.uri?.split(':')[0] || 'Unknown' }}</td>
-          <td>
-            <p-tag [value]="repo.health | titlecase" [severity]="getHealthSeverity(repo.health)"></p-tag>
-          </td>
-          <td>{{ formatDate(repo.lastCheck) }}</td>
-          <td>{{ formatBytes(repo.storageUsed * 1024 * 1024) }}</td>
-          <td>{{ repo.backupCount }}</td>
-          <td>
-            <p-tag [value]="repo.integrity | titlecase" [severity]="getIntegritySeverity(repo.integrity)"></p-tag>
-          </td>
-        </tr>
-      </ng-template>
-      <ng-template pTemplate="emptymessage">
-        <tr>
-          <td colspan="7" class="text-center p-4">
-            <div class="flex flex-column align-items-center">
-              <i class="pi pi-info-circle text-5xl text-700 mb-3"></i>
-              <span>No repositories found</span>
+    <!-- Repository Health -->
+    <p-tabPanel header="Repository Health">
+      <div class="card">
+        <div class="flex align-items-center justify-content-between mb-3">
+          <h3 class="m-0">Repository Health</h3>
+          <div class="flex gap-2">
+            <span class="p-input-icon-left">
+              <i class="pi pi-search"></i>
+              <input type="text" pInputText placeholder="Search repositories..." />
+            </span>
+            <button pButton icon="pi pi-shield" label="Check Integrity" 
+                    class="p-button-outlined p-button-info" 
+                    [disabled]="!selectedRepoForCheck"
+                    (click)="checkRepositoryIntegrity()"></button>
+          </div>
+        </div>
+        
+        <p-table [value]="repositories" [loading]="loadingRepositoryHealth" 
+                styleClass="p-datatable-sm" [paginator]="true" [rows]="5"
+                [(selection)]="selectedRepoForCheck" dataKey="repository_id">
+          <ng-template pTemplate="header">
+            <tr>
+              <th style="width: 3rem">
+                <p-tableHeaderCheckbox></p-tableHeaderCheckbox>
+              </th>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Health</th>
+              <th>Last Check</th>
+              <th>Storage Used</th>
+              <th>Backups</th>
+              <th>Integrity</th>
+              <th>Actions</th>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="body" let-repo>
+            <tr>
+              <td>
+                <p-tableCheckbox [value]="repo"></p-tableCheckbox>
+              </td>
+              <td>{{ repo.name }}</td>
+              <td>{{ repo.uri?.split(':')[0] || 'Unknown' }}</td>
+              <td>
+                <p-tag [value]="repo.health | titlecase" [severity]="getHealthSeverity(repo.health)"></p-tag>
+              </td>
+              <td>{{ formatDate(repo.lastCheck) }}</td>
+              <td>{{ formatBytes(repo.storageUsed ) }}</td>
+              <td>{{ repo.backupCount }}</td>
+              <td>
+                <p-tag [value]="repo.integrity | titlecase" [severity]="getIntegritySeverity(repo.integrity)"></p-tag>
+              </td>
+              <td>
+                <button pButton pRipple icon="pi pi-shield" class="p-button-rounded p-button-text"
+                        pTooltip="Check Integrity" tooltipPosition="left"
+                        (click)="checkRepositoryIntegrity(repo)"></button>
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template pTemplate="emptymessage">
+            <tr>
+              <td colspan="9" class="text-center p-4">
+                <div class="flex flex-column align-items-center">
+                  <i class="pi pi-info-circle text-5xl text-700 mb-3"></i>
+                  <span>No repositories found</span>
+                </div>
+              </td>
+            </tr>
+          </ng-template>
+        </p-table>
+        
+        <!-- Dialog for check operation -->
+        <p-dialog header="Repository Integrity Check" [(visible)]="showCheckDialog" 
+                  [style]="{width: '500px'}" [modal]="true">
+          <div class="p-fluid">
+            <div *ngIf="checkInProgress" class="flex flex-column align-items-center">
+              <p-progressSpinner styleClass="mb-2"></p-progressSpinner>
+              <p>Running integrity check on repository "{{checkingRepository?.name}}"...</p>
+              <p>This may take several minutes depending on repository size.</p>
             </div>
-          </td>
-        </tr>
-      </ng-template>
-    </p-table>
-  </div>
+            <div *ngIf="!checkInProgress && checkResult" class="mt-3">
+              <div *ngIf="checkSuccess" class="flex align-items-center text-green-600">
+                <i class="pi pi-check-circle mr-2 text-2xl"></i>
+                <span>Repository integrity check completed successfully. No errors found.</span>
+              </div>
+              <div *ngIf="!checkSuccess" class="flex align-items-center text-red-600">
+                <i class="pi pi-exclamation-circle mr-2 text-2xl"></i>
+                <span>Repository integrity check failed. See details below.</span>
+              </div>
+              <div *ngIf="checkOutput" class="mt-3">
+                <h4>Check Output</h4>
+                <div class="p-2 border-1 surface-border border-round bg-gray-900 text-white" style="max-height: 300px; overflow-y: auto; font-family: monospace; white-space: pre-wrap;">
+                  {{checkOutput}}
+                </div>
+              </div>
+            </div>
+          </div>
+          <ng-template pTemplate="footer">
+            <button pButton pRipple label="Close" icon="pi pi-times" class="p-button-text" (click)="showCheckDialog = false" [disabled]="checkInProgress"></button>
+          </ng-template>
+        </p-dialog>
+      </div>
+    </p-tabPanel>
+    
+    <!-- Repository Stats Tab -->
+    <p-tabPanel header="Repository Stats">
+      <div class="grid" *ngIf="!loadingRepoStats">
+        <div class="col-12 mb-4">
+          <div class="flex align-items-center justify-content-between">
+            <h3>Repository Statistics</h3>
+            <div class="flex align-items-center">
+              <p-dropdown [options]="backrestRepositories" [(ngModel)]="selectedRepoId" 
+                         optionLabel="name" optionValue="repository_id"
+                         (onChange)="onRepoChange($event)" styleClass="mr-2"></p-dropdown>
+              <button pButton icon="pi pi-refresh" (click)="refreshRepoStats()"></button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Repository stats charts -->
+        <div class="col-12 md:col-6">
+          <div class="card">
+            <h3>Storage Composition</h3>
+            <p-chart type="doughnut" [data]="repoStorageChart" [options]="repoStorageOptions" height="300px"></p-chart>
+          </div>
+        </div>
+        
+        <!-- Repository metrics -->
+        <div class="col-12 md:col-6">
+          <div class="card">
+            <h3>Repository Metrics</h3>
+            <div class="p-3">
+              <div class="mb-3">
+                <label class="block font-medium mb-2">Total Data Scanned</label>
+                <div class="text-xl">{{ formatBytes(repoStats?.total_size || 0) }}</div>
+              </div>
+              <div class="mb-3">
+                <label class="block font-medium mb-2">Size on Disk</label>
+                <div class="text-xl">{{ formatBytes(repoStats?.total_size_on_disk || 0) }}</div>
+              </div>
+              <div class="mb-3">
+                <label class="block font-medium mb-2">Compression Ratio</label>
+                <div class="text-xl">{{ (repoStats?.compression_ratio || 1) | number:'1.3-3' }}x</div>
+              </div>
+              <div class="mb-3">
+                <label class="block font-medium mb-2">Snapshot Count</label>
+                <div class="text-xl">{{ repoStats?.snapshot_count || 0 }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Recent operations -->
+        <div class="col-12">
+          <div class="card">
+            <h3>Recent Operations</h3>
+            <p-table [value]="repoOperations" styleClass="p-datatable-sm">
+              <ng-template pTemplate="header">
+                <tr>
+                  <th>ID</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Started</th>
+                  <th>Duration</th>
+                </tr>
+              </ng-template>
+              <ng-template pTemplate="body" let-op>
+                <tr>
+                  <td>{{ op.operation_id }}</td>
+                  <td>{{ op.operation_type }}</td>
+                  <td>
+                    <p-tag [value]="op.status" 
+                          [severity]="op.status === 'completed' ? 'success' : 
+                                     op.status === 'running' ? 'info' : 
+                                     op.status === 'failed' ? 'danger' : 'warning'">
+                    </p-tag>
+                  </td>
+                  <td>{{ formatDate(op.started_at) }}</td>
+                  <td>{{ getDuration(op.started_at, op.completed_at) }}</td>
+                 
+                </tr>
+              </ng-template>
+            </p-table>
+          </div>
+        </div>
+      </div>
+      
+      <div class="card" *ngIf="loadingRepoStats">
+        <p-skeleton height="500px" styleClass="w-full"></p-skeleton>
+      </div>
+    </p-tabPanel>
+  </p-tabView>
 </main>

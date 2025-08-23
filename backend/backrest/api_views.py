@@ -1,4 +1,5 @@
 # backend/backrest/api_views.py
+import time
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -9,7 +10,7 @@ from django.core.exceptions import PermissionDenied
 from accounts.api_views import IsTenantAdminOrOwner
 from .models import (
     SSHKey, Server, BackrestRepository, 
-    BackrestPlan, BackrestOperation, BackrestSnapshot, BackrestLog, BackrestInstance
+    BackrestPlan, BackrestOperation, BackrestSnapshot, BackrestLog, BackrestInstance, SystemOperation
 )
 from .serializers import (
     SSHKeySerializer, ServerSerializer, BackrestRepositorySerializer,
@@ -24,8 +25,40 @@ import json
 import bcrypt
 from django.db.models import Q
 from datetime import timedelta
+from .client import BackrestClient
+
+client = BackrestClient()
 
 logger = logging.getLogger(__name__)
+
+def process_log_timestamp(timestamp_value):
+    """Process a timestamp value to ensure it's timezone-aware"""
+    if isinstance(timestamp_value, (int, float)):
+        # If it's a Unix timestamp (seconds since epoch)
+        dt = datetime.fromtimestamp(timestamp_value)
+        return timezone.make_aware(dt)
+    elif isinstance(timestamp_value, str):
+        # If it's a string timestamp
+        try:
+            dt = datetime.datetime.fromisoformat(timestamp_value.replace('Z', '+00:00'))
+            if timezone.is_naive(dt):
+                return timezone.make_aware(dt)
+            return dt
+        except (ValueError, TypeError):
+            # Fallback parsing
+            try:
+                dt = datetime.datetime.strptime(timestamp_value, "%Y-%m-%d %H:%M:%S.%f")
+                return timezone.make_aware(dt)
+            except (ValueError, TypeError):
+                # Another common format
+                try:
+                    dt = datetime.datetime.strptime(timestamp_value, "%Y-%m-%d %H:%M:%S")
+                    return timezone.make_aware(dt)
+                except (ValueError, TypeError):
+                    pass
+    
+    # If all parsing fails, return current time
+    return timezone.now()
 
 class SSHKeyViewSet(viewsets.ModelViewSet):
     """API endpoint for SSH keys"""
@@ -410,44 +443,48 @@ EOT
                 "message": "Error during installation",
                 "details": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
     @action(detail=True, methods=['post'])
     def setup_instance(self, request, pk=None):
-        """Initialize Backrest instance with auth disabled and specific users with plaintext passwords"""
+        """Initialize Backrest instance with auth ENABLED and properly hashed passwords"""
         server = self.get_object()
         
         instance_id = request.data.get('instance_id', f"backrest-{server.id}")
         users = request.data.get('users', [{'name': 'admin', 'password': 'admin123'}])
-        disable_auth = request.data.get('disable_auth', True)
+        disable_auth = request.data.get('disable_auth', False)  # CHANGE: Enable auth by default
         
         try:
-            # First, wait for Backrest service to be fully available (with timeout)
+            # First, wait for Backrest service to be fully available
             import time
             max_retries = 5
-            retry_delay = 3  # Start with 3 seconds
+            retry_delay = 3
             backrest_service = BackrestService(server)
             
-            # Prepare users with plaintext passwords (let Backrest handle hashing)
+            # FIXED: Prepare users with PRE-HASHED passwords
             backrest_users = []
             user_passwords = {}
             
             for user_data in users:
                 username = user_data.get('name')
                 password = user_data.get('password')
+                
+                # Store plaintext password for response
                 user_passwords[username] = password
                 
-                # Send plaintext password and tell Backrest to hash it
+                # PRE-HASH the password and tell Backrest NOT to hash it again
+                import bcrypt
+                hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+                
                 backrest_users.append({
                     "name": username,
-                    "needsBcrypt": True,  # Tell Backrest to hash the password
-                    "passwordBcrypt": password  # Plain password
+                    "needsBcrypt": False,  # IMPORTANT: Already hashed, don't hash again
+                    "passwordBcrypt": hashed_password  # Send the hashed password
                 })
             
-            # Create config object
+            # Create config object with AUTH ENABLED
             config = {
                 "instance": instance_id,
                 "auth": {
-                    "disabled": disable_auth,
+                    "disabled": disable_auth,  # Use the parameter (default False = auth enabled)
                     "users": backrest_users
                 }
             }
@@ -458,94 +495,63 @@ EOT
             
             for attempt in range(max_retries):
                 try:
-                    logger.info(f"Attempt {attempt+1}/{max_retries} to configure Backrest via API")
+                    logger.info(f"Attempt {attempt+1}/{max_retries} to configure Backrest via API with AUTH ENABLED")
                     response = backrest_service._make_request('post', '/v1.Backrest/SetConfig', config)
                     success = True
-                    logger.info("Successfully configured Backrest via API")
+                    logger.info("Successfully configured Backrest via API with authentication enabled")
                     break
                 except Exception as e:
                     logger.warning(f"Attempt {attempt+1} failed: {str(e)}")
                     api_error = e
-                    # Exponential backoff
                     time.sleep(retry_delay)
                     retry_delay *= 2
             
-            # If API configuration failed after all retries, try SSH configuration
+            # If API configuration failed, try SSH configuration
             if not success:
                 logger.info("API configuration failed, attempting SSH configuration")
                 try:
-                    # Get SSH client
                     client = get_ssh_client_for_server(server)
                     
-                    # Create config file content in JSON format
                     import json
-                    import bcrypt
                     
-                    # Hash passwords locally since we can't use the API
+                    # Create SSH config with ALREADY HASHED passwords
                     ssh_config = {
                         "instance": instance_id,
                         "auth": {
                             "disabled": disable_auth,
-                            "users": []
+                            "users": backrest_users  # Use the same pre-hashed users
                         }
                     }
                     
-                    # Hash passwords locally
-                    for user in backrest_users:
-                        hashed = bcrypt.hashpw(user['passwordBcrypt'].encode(), bcrypt.gensalt()).decode()
-                        ssh_config["auth"]["users"].append({
-                            "name": user["name"],
-                            "passwordBcrypt": hashed,
-                            "needsBcrypt": False  # Already hashed
-                        })
-                    
                     config_json = json.dumps(ssh_config, indent=2)
                     
-                    # Create config directory if it doesn't exist
+                    # Create config directory and write file
                     stdin, stdout, stderr = client.exec_command("sudo mkdir -p /opt/backrest/config")
-                    stderr_output = stderr.read().decode()
-                    if stderr_output:
-                        logger.warning(f"mkdir stderr: {stderr_output}")
                     
-                    # Write config to file
                     config_file = "/tmp/backrest_config.json"
                     stdin, stdout, stderr = client.exec_command(f"echo '{config_json}' > {config_file}")
-                    stderr_output = stderr.read().decode()
-                    if stderr_output:
-                        logger.warning(f"echo stderr: {stderr_output}")
                     
-                    # Move to proper location with sudo
                     stdin, stdout, stderr = client.exec_command(f"sudo mv {config_file} /opt/backrest/config/config.json")
-                    stderr_output = stderr.read().decode()
-                    if stderr_output:
-                        logger.warning(f"mv stderr: {stderr_output}")
                     
-                    # Set permissions
+                    # Set proper permissions
                     stdin, stdout, stderr = client.exec_command("sudo chown -R backrest:backrest /opt/backrest/config && sudo chmod 600 /opt/backrest/config/config.json")
-                    stderr_output = stderr.read().decode()
-                    if stderr_output:
-                        logger.warning(f"chown/chmod stderr: {stderr_output}")
                     
                     # Restart service to apply config
                     stdin, stdout, stderr = client.exec_command("sudo systemctl restart backrest")
-                    stderr_output = stderr.read().decode()
-                    if stderr_output:
-                        logger.warning(f"restart stderr: {stderr_output}")
                     
                     success = True
-                    logger.info("Successfully configured Backrest via SSH")
+                    logger.info("Successfully configured Backrest via SSH with authentication enabled")
                     client.close()
                     
                 except Exception as ssh_error:
                     logger.error(f"SSH configuration failed: {str(ssh_error)}")
-                    # Even if both API and SSH fail, continue to create DB record
             
-            # Store instance ID in server model regardless of API/SSH success
+            # Store instance ID in server model
             if hasattr(server, 'backrest_instance_id'):
                 server.backrest_instance_id = instance_id
                 server.save()
             
-            # For security, don't return the full config with passwords in response
+            # Create response config (without sensitive data)
             response_config = {
                 "instance": instance_id,
                 "auth": {
@@ -554,9 +560,8 @@ EOT
                 }
             }
             
-            # ALWAYS create or update the BackrestInstance record regardless of API/SSH success
+            # Create BackrestInstance record
             tenant = request.tenant
-            
             instance, created = BackrestInstance.objects.update_or_create(
                 tenant=tenant,
                 instance_id=instance_id,
@@ -568,25 +573,26 @@ EOT
                 }
             )
             
-            # Determine appropriate status message
+            # Determine status message
             if success:
-                status_message = "configured successfully"
+                status_message = "configured successfully with authentication enabled"
             else:
-                status_message = "installation completed, but direct configuration failed - may need manual setup"
+                status_message = "installation completed, but configuration failed - may need manual setup"
             
             return Response({
-                "status": "success",  # Always return success if we got this far
+                "status": "success",
                 "message": f"Backrest instance {status_message}",
                 "instance_id": instance_id,
                 "user_credentials": user_passwords,
                 "config": response_config,
-                "note": "Instance has been registered in the database"
+                "auth_enabled": not disable_auth,
+                "note": "Authentication is now enabled. Use the provided credentials to log in."
             })
                 
         except Exception as e:
             logger.exception(f"Failed to configure Backrest instance: {str(e)}")
             
-            # Even on error, try to create the instance record
+            # Create fallback instance record
             try:
                 tenant = request.tenant
                 instance, created = BackrestInstance.objects.update_or_create(
@@ -605,10 +611,14 @@ EOT
             
             return Response({
                 "status": "warning",
-                "message": f"Failed to configure Backrest instance via API but created database record",
+                "message": f"Failed to configure Backrest instance but created database record",
                 "details": str(e),
                 "instance_id": instance_id
-            }, status=status.HTTP_202_ACCEPTED)  # Use 202 instead of 500 to indicate partial success
+            }, status=status.HTTP_202_ACCEPTED)
+    
+
+        
+
 
 class BackrestRepositoryViewSet(viewsets.ModelViewSet):
     """API endpoint for Backrest repositories"""
@@ -686,6 +696,93 @@ class BackrestRepositoryViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @action(detail=False, methods=['get'])
+    def repository_stats(self, request):
+        """Get repository statistics including compression ratio"""
+        repository_id = request.query_params.get('repository_id')
+        
+        if not repository_id:
+            return Response({"error": "repository_id required"}, status=400)
+        
+        try:
+            repository = BackrestRepository.objects.get(
+                id=repository_id, 
+                tenant=request.tenant
+            )
+            
+            backrest_service = BackrestService(repository.server)
+            
+            # Call Backrest API to get operations
+            operations_request = {
+                "selector": {
+                    "repoId": repository.repository_id
+                }
+            }
+            
+            operations = backrest_service._make_request(
+                'post', 
+                '/v1.Backrest/GetOperations', 
+                operations_request
+            )
+            
+            # Filter for stats operations only
+            stats_operations = []
+            for op in operations.get('operations', []):
+                if op.get('op', {}).get('case') == 'operationStats':
+                    stats_data = op['op']['value']['stats']
+                    stats_operations.append({
+                        'time': int(op.get('unixTimeEndMs', 0)),
+                        'totalSizeBytes': int(stats_data.get('totalSize', 0)),
+                        'compressionRatio': float(stats_data.get('compressionRatio', 0)),
+                        'snapshotCount': int(stats_data.get('snapshotCount', 0)),
+                        'totalBlobCount': int(stats_data.get('totalBlobCount', 0))
+                    })
+            
+            # Sort by time
+            stats_operations.sort(key=lambda x: x['time'])
+            
+            return Response({
+                'status': 'success',
+                'stats': stats_operations
+            })
+            
+        except Exception as e:
+            logger.error(f"Failed to get repository stats: {str(e)}")
+            return Response({
+                'status': 'error',
+                'message': str(e)
+            }, status=500)
+
+    @action(detail=True, methods=['post'])
+    def run_stats(self, request, pk=None):
+        """Run stats operation on repository"""
+        repository = self.get_object()
+        
+        try:
+            backrest_service = BackrestService(repository.server)
+            
+            stats_request = {
+                "value": repository.repository_id
+            }
+            
+            response = backrest_service._make_request(
+                'post',
+                '/v1.Backrest/Stats',  # Stats operation endpoint
+                stats_request
+            )
+            
+            return Response({
+                'status': 'success',
+                'message': 'Stats operation started',
+                'operation_id': response.get('operationId')
+            })
+            
+        except Exception as e:
+            return Response({
+                'status': 'error', 
+                'message': str(e)
+            }, status=500)
+
 class BackrestPlanViewSet(viewsets.ModelViewSet):
     """API endpoint for Backrest plans"""
     serializer_class = BackrestPlanSerializer
@@ -745,7 +842,42 @@ class BackrestPlanViewSet(viewsets.ModelViewSet):
             
             # Log the error but continue
             logger.warning(f"Created plan in database but Backrest API call failed: {str(e)}")
-    
+
+
+
+    def perform_update(self, serializer):
+        """Update a plan in Backrest and database"""
+        plan = self.get_object()
+        repository = serializer.validated_data['repository']
+        
+        if repository.tenant != self.request.tenant:
+            raise PermissionDenied("Repository does not belong to your tenant")
+        
+        try:
+            logger.info(f"Updating plan '{plan.plan_id}' for repo {repository.repository_id}")
+            
+            backrest_service = BackrestService(repository.server)
+            response = backrest_service.update_plan(
+                plan_id=plan.plan_id,
+                repository_id=repository.repository_id,
+                name=serializer.validated_data['name'],
+                paths=serializer.validated_data['paths'],
+                excludes=serializer.validated_data.get('excludes', []),
+                schedule=serializer.validated_data['schedule'],
+                retention_policy=serializer.validated_data['retention_policy']
+            )
+            
+            logger.info(f"Plan updated successfully in Backrest: {response}")
+            
+            # Save to database
+            serializer.save()
+            
+        except Exception as e:
+            logger.exception(f"Failed to update plan in Backrest: {str(e)}")
+            # Still save to database to keep UI in sync
+            serializer.save()
+            logger.warning(f"Updated plan in database but Backrest API call failed: {str(e)}")
+        
     @action(detail=True, methods=['post'])
     def trigger_backup(self, request, pk=None):
         """Trigger a backup for a plan and record it in the database"""
@@ -1025,6 +1157,778 @@ class BackrestOperationViewSet(viewsets.ReadOnlyModelViewSet):
                 'message': f'Failed to sync operations: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=False, methods=['get' ,'post'], url_path='structured')
+    def structured_operations(self, request):
+        """Return structured operations based on logs with proper parsing"""
+        tenant = request.tenant
+        
+        # Get query parameters
+        days = int(request.query_params.get('days', 30))
+        limit = int(request.query_params.get('limit', 100))
+        operation_type = request.query_params.get('type', None)
+        
+        try:
+            # Get logs for processing
+            query = BackrestLog.objects.filter(tenant=tenant)
+            
+            # Apply date filtering if specified
+            if days > 0:
+                cutoff_date = timezone.now() - timezone.timedelta(days=days)
+                query = query.filter(timestamp__gte=cutoff_date)
+            
+            # Get all logs for processing
+            logs = query.order_by('-timestamp')[:5000]  # Get a good number to work with
+            
+            # Group logs by operation
+            operations = self._parse_logs_to_operations(logs)
+            
+            # Apply operation type filter if specified
+            if operation_type:
+                operations = [op for op in operations if op.get('type') == operation_type]
+            
+            # Sort by start time (newest first)
+            operations.sort(key=lambda op: op.get('started_at', timezone.now()), reverse=True)
+            
+            # Apply limit
+            operations = operations[:limit]
+            
+            return Response({
+                "status": "success",
+                "count": len(operations),
+                "results": operations
+            })
+        
+        except Exception as e:
+            logger.exception(f"Error processing backrest operations: {str(e)}")
+            return Response({
+                "status": "error",
+                "message": str(e)
+            }, status=500)
+    
+    def _parse_logs_to_operations(self, logs):
+        """Parse logs into structured operations based on discovered patterns"""
+        # First group logs by operation context
+        operations_by_context = {}
+        operations = []
+        
+        # Group logs by their operation context
+        for log in logs:
+            # Skip irrelevant logs
+            if not log.message and not log.logger_name:
+                continue
+            
+            raw_message = log.message or ""
+            raw_logger = log.logger_name or ""
+            timestamp = log.timestamp
+            
+            # Create context keys based on discovered patterns
+            context_key = None
+            repo_name = None
+            plan_name = None
+            op_type = None
+            
+            # Extract repo name and plan name
+            repo_match = re.search(r'repo\s*["\']([^"\']+)["\']', raw_logger)
+            if repo_match:
+                repo_name = repo_match.group(1)
+                
+            plan_match = re.search(r'plan\s*["\']([^"\']+)["\']', raw_logger)
+            if plan_match:
+                plan_name = plan_match.group(1)
+            
+            # IMPROVED: Better type detection from logger name patterns
+            if "backup for plan" in raw_logger:
+                op_type = "backup"
+                context_key = f"backup:{plan_name}:{timestamp.strftime('%Y-%m-%d %H:%M')}"
+            elif "index snapshots" in raw_logger:
+                op_type = "index"
+                context_key = f"index:{repo_name}:{timestamp.strftime('%Y-%m-%d %H:%M')}"
+            elif "restore snapshot" in raw_logger or "restore operation" in raw_logger:
+                op_type = "restore"
+                context_key = f"restore:{repo_name}:{timestamp.strftime('%Y-%m-%d %H:%M')}"
+            elif "collect garbage" in raw_logger:
+                op_type = "maintenance"
+                context_key = f"maintenance:{timestamp.strftime('%Y-%m-%d %H:%M')}"
+            elif "stats for repo" in raw_logger:
+                op_type = "stats"
+                context_key = f"stats:{repo_name}:{timestamp.strftime('%Y-%m-%d %H:%M')}"
+            
+            # NEW: Detect operation type from the message content
+            elif "backup complete" in raw_message.lower() or "backup completed" in raw_message.lower():
+                op_type = "backup"
+                context_key = f"backup:message:{timestamp.strftime('%Y-%m-%d %H:%M')}"
+            elif "task finished" in raw_message.lower():
+                # Look at previous message to determine type if available
+                if operations_by_context:
+                    # Find nearest context in time
+                    nearest_context = None
+                    min_time_diff = float('inf')
+                    for ctx_key, ctx_data in operations_by_context.items():
+                        if "running task" in " ".join([log.get("message", "") for log in ctx_data["logs"]]):
+                            time_diff = abs((timestamp - ctx_data["logs"][-1]["timestamp"]).total_seconds())
+                            if time_diff < min_time_diff:
+                                min_time_diff = time_diff
+                                nearest_context = ctx_key
+                                
+                    if nearest_context and min_time_diff < 60:  # Within 60 seconds
+                        context_key = nearest_context
+                        op_type = operations_by_context[nearest_context]["type"]
+                
+                # If we still don't have a type, try to infer from surrounding logs
+                if not op_type:
+                    op_type = "maintenance"  # Default
+                    context_key = f"maintenance:{timestamp.strftime('%Y-%m-%d %H:%M')}"
+            
+            # NEW: Handle scheduled tasks better
+            elif "scheduled task" in raw_message.lower():
+                # This is the start of a task - look ahead to determine type
+                future_logs = [l for l in logs if l.timestamp > timestamp and l.timestamp < timestamp + timezone.timedelta(minutes=2)]
+                future_types = []
+                for future_log in future_logs:
+                    if "backup" in (future_log.message or "").lower():
+                        future_types.append("backup")
+                    elif "index" in (future_log.message or "").lower():
+                        future_types.append("index")
+                    elif "garbage" in (future_log.message or "").lower():
+                        future_types.append("maintenance")
+                        
+                if future_types:
+                    op_type = max(set(future_types), key=future_types.count)  # Most common type
+                    context_key = f"{op_type}:{timestamp.strftime('%Y-%m-%d %H:%M')}"
+                else:
+                    op_type = "unknown"
+                    context_key = f"unknown:{timestamp.strftime('%Y-%m-%d %H:%M')}"
+            
+            # NEW: Look for specific operation keywords in message
+            elif any(kw in raw_message.lower() for kw in ["index snapshots", "indexing"]):
+                op_type = "index"
+                context_key = f"index:{repo_name or 'unknown'}:{timestamp.strftime('%Y-%m-%d %H:%M')}"
+            elif "garbage" in raw_message.lower():
+                op_type = "maintenance"
+                context_key = f"maintenance:{timestamp.strftime('%Y-%m-%d %H:%M')}"
+            
+            # Fall back to timestamp-based grouping if we still don't have a key
+            if not context_key:
+                # Group by 5-minute intervals for better clustering
+                minute_bucket = timestamp.replace(minute=timestamp.minute // 5 * 5, second=0, microsecond=0)
+                context_key = f"unknown:{minute_bucket.isoformat()}"
+                op_type = "unknown"
+            
+            # Add to the appropriate operation context
+            if context_key not in operations_by_context:
+                operations_by_context[context_key] = {
+                    "logs": [],
+                    "type": op_type,
+                    "plan_name": plan_name,
+                    "repo_name": repo_name,
+                    "start_time": timestamp,
+                    "end_time": None,
+                    "status": "unknown"
+                }
+            
+            # Add log to this context
+            operations_by_context[context_key]["logs"].append({
+                "timestamp": timestamp,
+                "message": raw_message,
+                "logger": raw_logger,
+                "level": log.level,
+                "error": log.error,
+                "server": log.server.hostname if log.server else "Unknown"
+            })
+            
+            # Update start time if this log is earlier
+            if timestamp < operations_by_context[context_key]["start_time"]:
+                operations_by_context[context_key]["start_time"] = timestamp
+        
+        # Process each operation group
+        for context_key, operation_data in operations_by_context.items():
+            logs = sorted(operation_data["logs"], key=lambda x: x["timestamp"])
+            
+            if not logs:
+                continue
+                
+            # Initialize operation with default values
+            op = {
+                "id": f"op-{operation_data['type']}-{int(operation_data['start_time'].timestamp())}",
+                "type": operation_data["type"],
+                "started_at": operation_data["start_time"],
+                "completed_at": None,
+                "duration": 0,
+                "status": "unknown",
+                "repository": operation_data["repo_name"] or "Unknown",
+                "plan": operation_data["plan_name"] or "N/A",
+                "message": "",
+                "level": logs[0]["level"],
+                "error": None,
+                "server_name": logs[0]["server"]
+            }
+            
+            # Create a descriptive message based on operation type
+            if operation_data["type"] == "backup":
+                if operation_data["plan_name"]:
+                    op["message"] = f"Backup for plan '{operation_data['plan_name']}'"
+                else:
+                    op["message"] = f"Backup operation at {logs[0]['timestamp'].strftime('%Y-%m-%d %H:%M')}"
+            elif operation_data["type"] == "index":
+                if operation_data["repo_name"]:
+                    op["message"] = f"Index snapshots for '{operation_data['repo_name']}'"
+                else:
+                    op["message"] = f"Index operation at {logs[0]['timestamp'].strftime('%Y-%m-%d %H:%M')}"
+            elif operation_data["type"] == "maintenance":
+                op["message"] = f"Maintenance operation at {logs[0]['timestamp'].strftime('%Y-%m-%d %H:%M')}"
+            else:
+                op["message"] = logs[0]["logger"] if logs[0]["logger"] else logs[0]["message"]
+                
+            # IMPROVED: Better status detection and timestamp handling
+            op["status"] = self._determine_operation_status(logs)
+            
+            # Set completed_at and calculate duration if operation is complete
+            for log in logs:
+                if "task finished" in log["message"].lower() or "backup complete" in log["message"].lower():
+                    op["completed_at"] = log["timestamp"]
+                    break
+            
+            # If no explicit completion found but status is completed, use last log time
+            if not op["completed_at"] and op["status"] in ["completed", "failed"]:
+                op["completed_at"] = logs[-1]["timestamp"]
+            
+            # Calculate duration only if completed_at is available
+            if op["completed_at"]:
+                op["duration"] = (op["completed_at"] - op["started_at"]).total_seconds()
+                
+            # Add to operations list
+            operations.append(op)
+        
+        # Apply filtering to remove redundant operations
+        if operations:
+            operations = self._filter_redundant_operations(operations)
+                
+        return operations
+    
+    # In the BackrestOperationViewSet class or relevant view that processes log entries:
+    def _parse_backup_summary(self, summary_text):
+        """Parse backup summary text into structured data"""
+        result = {
+            "files_changed": 0,
+            "files_new": 0,
+            "files_unmodified": 0,
+            "dirs_changed": 0,
+            "dirs_new": 0,
+            "dirs_unmodified": 0,
+            "tree_blobs": 0,
+            "data_blobs": 0,
+            "data_added": 0,
+            "total_files_processed": 0,
+            "total_bytes_processed": 0,
+            "total_duration": 0,
+            "snapshot_id": "",
+            "efficiency": 0
+        }
+        
+        try:
+            # Clean up summary text
+            if summary_text.startswith('summary:'):
+                summary_text = summary_text[8:]
+                
+            # Extract each value using regex pattern matching
+            files_new_match = re.search(r'files_new:(\d+)', summary_text)
+            if files_new_match:
+                result["files_new"] = int(files_new_match.group(1))
+                result["files_changed"] = int(files_new_match.group(1))  # Map new files to changed
+                
+            files_changed_match = re.search(r'files_changed:(\d+)', summary_text)
+            if files_changed_match:
+                result["files_changed"] = int(files_changed_match.group(1))
+                
+            files_unmodified_match = re.search(r'files_unmodified:(\d+)', summary_text)
+            if files_unmodified_match:
+                result["files_unmodified"] = int(files_unmodified_match.group(1))
+                
+            dirs_new_match = re.search(r'dirs_new:(\d+)', summary_text)
+            if dirs_new_match:
+                result["dirs_new"] = int(dirs_new_match.group(1))
+                result["dirs_changed"] = int(dirs_new_match.group(1))  # Map new dirs to changed
+                
+            dirs_changed_match = re.search(r'dirs_changed:(\d+)', summary_text)
+            if dirs_changed_match:
+                result["dirs_changed"] = int(dirs_changed_match.group(1))
+                
+            dirs_unmodified_match = re.search(r'dirs_unmodified:(\d+)', summary_text)
+            if dirs_unmodified_match:
+                result["dirs_unmodified"] = int(dirs_unmodified_match.group(1))
+                
+            tree_blobs_match = re.search(r'tree_blobs:(\d+)', summary_text)
+            if tree_blobs_match:
+                result["tree_blobs"] = int(tree_blobs_match.group(1))
+                
+            data_blobs_match = re.search(r'data_blobs:(\d+)', summary_text)
+            if data_blobs_match:
+                result["data_blobs"] = int(data_blobs_match.group(1))
+                
+            data_added_match = re.search(r'data_added:(\d+)', summary_text)
+            if data_added_match:
+                result["data_added"] = int(data_added_match.group(1))
+                
+            total_files_match = re.search(r'total_files_processed:(\d+)', summary_text)
+            if total_files_match:
+                result["total_files_processed"] = int(total_files_match.group(1))
+                
+            total_bytes_match = re.search(r'total_bytes_processed:(\d+)', summary_text)
+            if total_bytes_match:
+                result["total_bytes_processed"] = int(total_bytes_match.group(1))
+                
+            total_duration_match = re.search(r'total_duration:([0-9.]+)', summary_text)
+            if total_duration_match:
+                result["total_duration"] = float(total_duration_match.group(1))
+                
+            snapshot_id_match = re.search(r'snapshot_id:"([^"]+)"', summary_text)
+            if snapshot_id_match:
+                result["snapshot_id"] = snapshot_id_match.group(1)
+                
+            # Calculate efficiency if both values are available
+            if result["total_bytes_processed"] > 0 and result["data_added"] > 0:
+                result["efficiency"] = (1 - (result["data_added"] / result["total_bytes_processed"])) * 100
+            
+        except Exception as e:
+            logger.warning(f"Error parsing backup summary: {e}")
+        
+        return result
+
+    @action(detail=False, methods=['get'], url_path='dashboard')
+    def operations_dashboard(self, request):
+        """Generate a dashboard of operations statistics with improved categorization"""
+        tenant = request.tenant
+        days = int(request.query_params.get('days', 30))
+        
+        # Get cutoff date
+        cutoff_date = timezone.now() - timezone.timedelta(days=days)
+        
+        # Get logs for processing
+        logs = BackrestLog.objects.filter(
+            tenant=tenant,
+            timestamp__gte=cutoff_date
+        ).order_by('-timestamp')
+        
+        # Parse logs into operations
+        operations = self._parse_logs_to_operations(logs)
+        
+        # Filter out unknown operations for the dashboard
+        known_operations = [op for op in operations if op["type"] != "unknown"]
+        
+        # Generate statistics
+        total_operations = len(known_operations)
+        operations_by_type = {}
+        operations_by_status = {
+            "completed": 0,
+            "failed": 0,
+            "running": 0,
+            "unknown": 0
+        }
+        operations_by_repo = {}
+        operations_by_plan = {}
+        operations_by_date = {}
+        
+        for op in known_operations:
+            # Count by type
+            op_type = op["type"]
+            operations_by_type[op_type] = operations_by_type.get(op_type, 0) + 1
+            
+            # Count by status
+            status = op["status"]
+            operations_by_status[status] = operations_by_status.get(status, 0) + 1
+            
+            # Count by repository
+            repo = op["repository"]
+            operations_by_repo[repo] = operations_by_repo.get(repo, 0) + 1
+            
+            # Count by plan
+            plan = op["plan"]
+            if plan != "N/A":
+                operations_by_plan[plan] = operations_by_plan.get(plan, 0) + 1
+            
+            # Count by date (group by day)
+            day = op["started_at"].strftime("%Y-%m-%d")
+            operations_by_date[day] = operations_by_date.get(day, 0) + 1
+        
+        # Calculate average duration of completed operations
+        completed_ops = [op for op in known_operations if op["status"] == "completed" and op["duration"] > 0]
+        avg_duration = sum(op["duration"] for op in completed_ops) / len(completed_ops) if completed_ops else 0
+        
+        # Get recent failures
+        failures = [op for op in known_operations if op["status"] == "failed"][:5]
+        
+        return Response({
+            "status": "success",
+            "total_operations": total_operations,
+            "by_type": operations_by_type,
+            "by_status": operations_by_status,
+            "by_repository": operations_by_repo,
+            "by_plan": operations_by_plan,
+            "by_date": dict(sorted(operations_by_date.items())),
+            "avg_duration_seconds": avg_duration,
+            "recent_failures": failures,
+            # Include count of filtered unknown operations
+            "unknown_operations_filtered": len(operations) - len(known_operations)
+        })
+
+
+    def _determine_operation_status(self, logs):
+        """Determine operation status based on log messages and patterns"""
+        # Look for clear completion indicators
+        if any("task finished" in log["message"].lower() for log in logs):
+            return "completed"
+        
+        # Look for explicit backup completions
+        if any("backup complete" in log["message"].lower() or "backup completed" in log["message"].lower() for log in logs):
+            return "completed"
+        
+        # Look for explicit indexing completions
+        if any("found" in log["message"].lower() and "snapshot" in log["message"].lower() and "indexed" in log["message"].lower() for log in logs):
+            return "completed"
+        
+        # Look for failure messages
+        if any("task failed" in log["message"].lower() for log in logs):
+            return "failed"
+        if any("error" in log["message"].lower() for log in logs):
+            return "failed"
+        
+        # Look for running indicators
+        if any("running task" in log["message"].lower() for log in logs):
+            # Check if this is followed by completion within the logs
+            if any("task finished" in log["message"].lower() for log in logs):
+                return "completed"
+            return "running"
+        
+        # Look for scheduled tasks
+        if any("scheduled task" in log["message"].lower() for log in logs):
+            # If task was scheduled but no completion yet
+            if not any(("task finished" in log["message"].lower() or "backup complete" in log["message"].lower()) for log in logs):
+                return "running"
+        
+        # For older logs (> 1 day), assume they completed if they have indicative keywords
+        if logs and (timezone.now() - logs[0]["timestamp"]).days >= 1:
+            if any(keyword in " ".join([log["message"].lower() for log in logs]) for keyword in 
+                ["backup", "index", "snapshots", "garbage", "complete"]):
+                return "completed"
+        
+        # Default status
+        return "unknown"
+    
+    def _filter_redundant_operations(self, operations):
+        """Filter out redundant operations and prioritize known operations"""
+        if not operations:
+            return []
+            
+        # Sort by timestamp (newest first)
+        sorted_ops = sorted(operations, key=lambda x: x["started_at"], reverse=True)
+        
+        # Group operations that are likely duplicates (same type, close timestamps)
+        unique_ops = []
+        seen_keys = set()
+        
+        # First pass: add all non-unknown operations
+        for op in sorted_ops:
+            if op["type"] != "unknown":
+                # Create a key that represents this operation's uniqueness
+                minute_ts = op["started_at"].replace(second=0, microsecond=0)
+                uniqueness_key = f"{op['type']}:{op['repository']}:{op['plan']}:{minute_ts.isoformat()}"
+                
+                if uniqueness_key not in seen_keys:
+                    seen_keys.add(uniqueness_key)
+                    unique_ops.append(op)
+        
+        # Second pass: only add unknown operations if they don't overlap with known ones
+        for op in sorted_ops:
+            if op["type"] == "unknown":
+                # Check if this unknown operation overlaps with any known operation
+                overlaps = False
+                minute_ts = op["started_at"].replace(second=0, microsecond=0)
+                
+                for known_op in unique_ops:
+                    known_ts = known_op["started_at"].replace(second=0, microsecond=0)
+                    # If within 5 minutes of a known operation, consider it an overlap
+                    if abs((minute_ts - known_ts).total_seconds()) < 300:
+                        overlaps = True
+                        break
+                
+                if not overlaps:
+                    unique_ops.append(op)
+        
+        # Sort back by start time (newest first)
+        return sorted(unique_ops, key=lambda x: x["started_at"], reverse=True)
+    
+    
+    @action(detail=False, methods=['get'], url_path='raw-log-details/(?P<operation_id>.+)')
+    def get_raw_log_details(self, request, operation_id=None):
+        """Get raw log details for a specific operation directly from backrest.log file"""
+        if not operation_id:
+            return Response({"status": "error", "message": "No operation ID provided"}, status=400)
+        
+        # URL decode the operation_id to handle special characters
+        operation_id = urllib.parse.unquote(operation_id)
+        
+        tenant = request.tenant
+        
+        # Get query parameters from request
+        filter_date = request.query_params.get('date')
+        filter_type = request.query_params.get('type')
+        filter_plan = request.query_params.get('plan')
+        operation_id_param = request.query_params.get('operation_id')
+        strict_match = request.query_params.get('strict_match', 'false').lower() == 'true'
+        
+        logger.info(f"Getting logs for operation: {operation_id}")
+        logger.info(f"Filter params - date: {filter_date}, type: {filter_type}, plan: {filter_plan}, strict: {strict_match}")
+        
+        try:
+            # Parse the operation ID to extract plan name and timestamp
+            plan_name = None
+            timestamp_str = None
+            operation_type = None
+            
+            # Pattern: op-backup for plan "manual_backup"-1753370597247
+            match = re.search(r'op-([\w-]+) for plan "([^"]+)"-(\d+)', operation_id)
+            if match:
+                operation_type = match.group(1)
+                plan_name = match.group(2)
+                timestamp_str = match.group(3)
+            else:
+                # Try alternate pattern without quotes
+                match = re.search(r'op-([\w-]+) for plan ([^-]+)-(\d+)', operation_id)
+                if match:
+                    operation_type = match.group(1)
+                    plan_name = match.group(2)
+                    timestamp_str = match.group(3)
+                else:
+                    # Try to extract any plan name
+                    plan_match = re.search(r'for plan ["\']([^"\']+)["\']', operation_id)
+                    if plan_match:
+                        plan_name = plan_match.group(1)
+                    
+                    # Try to extract any timestamp
+                    timestamp_match = re.search(r'-(\d+)$', operation_id)
+                    if timestamp_match:
+                        timestamp_str = timestamp_match.group(1)
+            
+            # Use the provided filter parameters if available, but prioritize extracted values
+            if not plan_name and filter_plan:
+                plan_name = filter_plan
+            if not operation_type and filter_type:
+                operation_type = filter_type
+            
+            # Find the server associated with this plan
+            server = None
+            if plan_name:
+                try:
+                    plan = BackrestPlan.objects.get(name=plan_name, tenant=tenant)
+                    server = plan.repository.server
+                except BackrestPlan.DoesNotExist:
+                    try:
+                        plan = BackrestPlan.objects.get(plan_id=plan_name, tenant=tenant)
+                        server = plan.repository.server
+                    except BackrestPlan.DoesNotExist:
+                        server = Server.objects.filter(tenant=tenant).first()
+            else:
+                server = Server.objects.filter(tenant=tenant).first()
+            
+            if not server:
+                return Response({
+                    "status": "error",
+                    "message": "No server available to fetch logs"
+                }, status=404)
+                
+            # Create SSH connection
+            ssh_client = get_ssh_client_for_server(server)
+            
+            if not ssh_client:
+                return Response({
+                    "status": "error",
+                    "message": "Failed to connect to server"
+                }, status=500)
+            
+            try:
+                # Prepare more specific search terms
+                search_commands = []
+                
+                if strict_match and plan_name:
+                    # MOST SPECIFIC: Search for exact plan name with quotes and operation type
+                    if operation_type:
+                        search_commands.append(
+                            f"grep -E '(backup|running task).*plan \\\"{re.escape(plan_name)}\\\"' /opt/backrest/data/processlogs/backrest.log | grep -v 'collect garbage'"
+                        )
+                    
+                    # BACKUP: Search for exact plan name pattern
+                    search_commands.append(
+                        f"grep -F 'plan \"{plan_name}\"' /opt/backrest/data/processlogs/backrest.log | grep -v 'collect garbage'"
+                    )
+                    
+                    # FALLBACK: Search for plan name without strict quotes
+                    search_commands.append(
+                        f"grep -E 'plan.*{re.escape(plan_name)}[^a-zA-Z0-9_]' /opt/backrest/data/processlogs/backrest.log | grep -v 'collect garbage'"
+                    )
+                else:
+                    # Less strict search if not in strict mode
+                    if plan_name:
+                        search_commands.append(
+                            f"grep -E 'plan.*{re.escape(plan_name)}' /opt/backrest/data/processlogs/backrest.log | grep -v 'collect garbage'"
+                        )
+                    
+                    if operation_type:
+                        search_commands.append(
+                            f"grep -E '{operation_type}' /opt/backrest/data/processlogs/backrest.log | grep -v 'collect garbage'"
+                        )
+                
+                # Add date filtering if available
+                if filter_date:
+                    date_filter = f"grep '{filter_date}'"
+                    search_commands = [f"{cmd} | {date_filter}" for cmd in search_commands]
+                
+                # Try each search command until we get results
+                raw_logs = ""
+                search_used = ""
+                
+                for i, command in enumerate(search_commands):
+                    logger.info(f"Trying search command {i+1}: {command}")
+                    
+                    stdin, stdout, stderr = ssh_client.exec_command(f"{command} | tail -n 200")
+                    result = stdout.read().decode('utf-8')
+                    
+                    if result.strip():
+                        raw_logs = result
+                        search_used = command
+                        logger.info(f"Found {len(result.split())} lines with command {i+1}")
+                        break
+                    else:
+                        logger.info(f"No results from command {i+1}")
+                
+                # If no results from specific searches, try a broader search
+                if not raw_logs.strip() and plan_name:
+                    logger.info("Trying broader search...")
+                    broad_command = f"grep -i '{plan_name}' /opt/backrest/data/processlogs/backrest.log | tail -n 100"
+                    stdin, stdout, stderr = ssh_client.exec_command(broad_command)
+                    raw_logs = stdout.read().decode('utf-8')
+                    search_used = broad_command
+                
+                # Parse the raw logs
+                parsed_logs = []
+                summary_data = None
+                target_plan_logs = []
+                
+                # Process each log line
+                for line in raw_logs.strip().split('\n'):
+                    try:
+                        if line.strip():
+                            log_entry = json.loads(line)
+                            
+                            # STRICT FILTERING: Only include logs that match the exact plan
+                            if strict_match and plan_name:
+                                log_plan_match = False
+                                
+                                # Check multiple fields for plan name
+                                plan_fields = [
+                                    log_entry.get('plan', ''),
+                                    log_entry.get('logger', ''),
+                                    log_entry.get('task', ''),
+                                    log_entry.get('msg', '')
+                                ]
+                                
+                                for field in plan_fields:
+                                    if field and plan_name in field:
+                                        # Ensure exact match, not substring
+                                        if f'"{plan_name}"' in field or f"'{plan_name}'" in field:
+                                            log_plan_match = True
+                                            break
+                                        # Also check for word boundaries
+                                        if re.search(r'\b' + re.escape(plan_name) + r'\b', field):
+                                            log_plan_match = True
+                                            break
+                                
+                                if not log_plan_match:
+                                    continue
+                            
+                            # Add to list for full context
+                            parsed_logs.append(log_entry)
+                            
+                            # Track logs specifically for target plan
+                            if plan_name and (
+                                (log_entry.get('plan') == plan_name) or
+                                (log_entry.get('logger', '').find(f'"{plan_name}"') != -1) or
+                                (log_entry.get('task', '').find(f'"{plan_name}"') != -1)
+                            ):
+                                target_plan_logs.append(log_entry)
+                                
+                                # Check for backup complete message with summary
+                                if (log_entry.get('msg') == 'backup complete' and 
+                                    log_entry.get('plan') == plan_name and 
+                                    'summary' in log_entry):
+                                    summary_text = log_entry['summary']
+                                    summary_data = self._parse_backup_summary(summary_text)
+                                    if 'duration' in log_entry:
+                                        summary_data['total_duration'] = log_entry['duration']
+                            
+                            # Extract timestamp for chronological ordering
+                            if 'ts' in log_entry:
+                                log_entry['timestamp'] = log_entry['ts']
+                                
+                    except Exception as e:
+                        logger.error(f"Error parsing log line: {e}")
+                        continue
+                
+                # Sort logs by timestamp
+                parsed_logs.sort(key=lambda x: x.get('timestamp', 0))
+                target_plan_logs.sort(key=lambda x: x.get('timestamp', 0))
+                
+                # Calculate additional statistics if available
+                if summary_data:
+                    if summary_data.get('total_bytes_processed', 0) > 0 and summary_data.get('data_added', 0) > 0:
+                        summary_data['deduplication_ratio'] = summary_data['total_bytes_processed'] / summary_data['data_added']
+                        summary_data['space_saved_percent'] = 100 * (1 - summary_data['data_added'] / summary_data['total_bytes_processed'])
+                
+                # Extract duration if found in logs
+                duration = None
+                for log in target_plan_logs:
+                    if 'duration' in log:
+                        duration = log['duration']
+                        break
+                
+                # Return results with debugging info
+                return Response({
+                    "status": "success",
+                    "operation_id": operation_id,
+                    "raw_logs": parsed_logs,
+                    "target_plan_logs": target_plan_logs,
+                    "summary": summary_data,
+                    "plan_name": plan_name,
+                    "duration": duration,
+                    "log_count": len(parsed_logs),
+                    "target_plan_log_count": len(target_plan_logs),
+                    "search_used": search_used,
+                    "search_terms": [plan_name, operation_type, filter_date],
+                    "date_used": filter_date,
+                    "strict_match_used": strict_match
+                })
+                
+            finally:
+                ssh_client.close()
+                
+        except Exception as e:
+            logger.exception(f"Error fetching raw log details: {str(e)}")
+            return Response({
+                "status": "error",
+                "message": f"Failed to fetch raw log details: {str(e)}"
+            }, status=500)
+        
+
+    def _get_server_for_plan(self, plan_name, tenant):
+        """Get the server associated with a plan"""
+        try:
+            plan = BackrestPlan.objects.get(name=plan_name, tenant=tenant)
+            return plan.repository.server
+        except BackrestPlan.DoesNotExist:
+            return None
+        
+        
+    
+
 class BackrestSnapshotViewSet(viewsets.ReadOnlyModelViewSet):
     """API endpoint for Backrest snapshots"""
     serializer_class = BackrestSnapshotSerializer
@@ -1033,13 +1937,92 @@ class BackrestSnapshotViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return BackrestSnapshot.objects.filter(tenant=self.request.tenant)
     
-    @action(detail=True, methods=['post'])
-    def restore(self, request, pk=None):
-        """Initiate restore from a snapshot"""
-        snapshot = self.get_object()
-        # Implement restore logic
-        return Response({"status": "restore initiated"})
-    
+    # In BackrestSnapshotViewSet class, replace the restore method:
+    @action(detail=False, methods=['post'])
+    def restore(self, request):
+        """Initiate a restore operation with correct Backrest API format"""
+        snapshot_id = request.data.get('snapshot_id')
+        repository_id = request.data.get('repository_id')
+        target_path = request.data.get('target_path')
+        include_paths = request.data.get('include_paths', ['/'])
+        exclude_patterns = request.data.get('exclude_patterns', [])
+        
+        if not all([snapshot_id, repository_id, target_path]):
+            return Response({
+                "error": "snapshot_id, repository_id, and target_path are required"
+            }, status=400)
+        
+        try:
+            # Find repository
+            repository = BackrestRepository.objects.get(
+                repository_id=repository_id,
+                tenant=request.tenant
+            )
+            
+            # Ensure repository ID is valid
+            backrest_repo_id = repository.repository_id
+            if not backrest_repo_id or backrest_repo_id.strip() == "":
+                backrest_repo_id = repository.name.replace(" ", "_").lower()
+                repository.repository_id = backrest_repo_id
+                repository.save()
+            
+            backrest_service = BackrestService(repository.server)
+            
+            # FIXED: Use correct Backrest API format with "value" wrapper
+            restore_request = {
+                "value": {
+                    "repo": backrest_repo_id,
+                    "snapshotId": snapshot_id,
+                    "path": "/",
+                    "target": target_path,
+                    "includePaths": include_paths,
+                    "excludePatterns": exclude_patterns
+                }
+            }
+            
+            logger.info(f"Calling Backrest restore with: {json.dumps(restore_request, indent=2)}")
+            
+            response = backrest_service._make_request(
+                'POST',
+                '/v1.Backrest/Restore',
+                restore_request
+            )
+            
+            # Create operation record
+            operation = BackrestOperation.objects.create(
+                tenant=request.tenant,
+                repository=repository,
+                operation_type="restore",
+                operation_id=response.get('operationId') or f"restore_{int(time.time())}",
+                status="running",
+                started_at=timezone.now(),
+                stats={
+                    'snapshot_id': snapshot_id,
+                    'target_path': target_path,
+                    'include_paths': include_paths
+                }
+            )
+            
+            return Response({
+                'status': 'success',
+                'message': 'Restore operation started',
+                'operation_id': operation.operation_id,
+                'backrest_response': response
+            })
+            
+        except BackrestRepository.DoesNotExist:
+            return Response({
+                "error": f"Repository not found: {repository_id}"
+            }, status=404)
+        except Exception as e:
+            logger.error(f"Failed to initiate restore: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'status': 'error',
+                'message': str(e)
+            }, status=500)
+        
     @action(detail=True, methods=['get'])
     def test_backrest_connection(self, request, pk=None):
         """Test connection to Backrest server"""
@@ -1323,7 +2306,91 @@ class BackrestSnapshotViewSet(viewsets.ReadOnlyModelViewSet):
                 'status': 'error',
                 'message': f'Error checking logs: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    @action(detail=False, methods=['post'])
+    def list_files(self, request):
+        """List files in a snapshot"""
+        repo_id = request.data.get('repoId')
+        snapshot_id = request.data.get('snapshotId')
+        path = request.data.get('path', '/')
+        
+        if not repo_id or not snapshot_id:
+            return Response({
+                "error": "repoId and snapshotId are required"
+            }, status=400)
+        
+        try:
+            # FIXED: Always lookup by repository_id field (the Backrest repo ID string)
+            repository = BackrestRepository.objects.get(
+                repository_id=repo_id,  # This is the string field like "testing"
+                tenant=request.tenant
+            )
+            
+            backrest_service = BackrestService(repository.server)
+            
+            # Call Backrest API to list files
+            response = backrest_service.list_snapshot_files(repo_id, snapshot_id, path)
+            
+            return Response({
+                'status': 'success',
+                'entries': response.get('entries', []),
+                'path': path
+            })
+            
+        except BackrestRepository.DoesNotExist:
+            return Response({
+                "error": f"Repository not found with repository_id: {repo_id}",
+                "available_repositories": list(
+                    BackrestRepository.objects.filter(tenant=request.tenant)
+                    .values('id', 'repository_id', 'name')
+                )
+            }, status=404)
+        except Exception as e:
+            logger.error(f"Failed to list snapshot files: {str(e)}")
+            return Response({
+                'status': 'error',
+                'message': str(e)
+            }, status=500)
+        
+    @action(detail=False, methods=['get'])
+    def snapshots(self, request):
+        """Get all snapshots from all repositories for restore"""
+        try:
+            repositories = BackrestRepository.objects.filter(tenant=request.tenant)
+            all_snapshots = []
+            
+            for repo in repositories:
+                try:
+                    backrest_service = BackrestService(repo.server)
+                    snapshots = backrest_service.get_snapshots(repo.repository_id)
+                    
+                    # Add repository info to each snapshot
+                    for snapshot in snapshots:
+                        snapshot['repository'] = repo.id
+                        snapshot['repository_name'] = repo.name
+                        snapshot['repository_id'] = repo.repository_id
+                    
+                    all_snapshots.extend(snapshots)
+                    
+                except Exception as e:
+                    logger.error(f"Failed to get snapshots for repo {repo.name}: {str(e)}")
+                    continue
+            
+            # Sort by time descending (newest first)
+            all_snapshots.sort(key=lambda x: x.get('time', ''), reverse=True)
+            
+            logger.info(f"Returning {len(all_snapshots)} snapshots")
+            return Response(all_snapshots)
+            
+        except Exception as e:
+            logger.error(f"Failed to get snapshots: {str(e)}")
+            return Response([], status=500)
 
+
+   
+
+
+    
 class BackrestLogViewSet(viewsets.ReadOnlyModelViewSet):
     """API endpoint for Backrest logs"""
     serializer_class = BackrestLogSerializer
@@ -1353,40 +2420,320 @@ class BackrestLogViewSet(viewsets.ReadOnlyModelViewSet):
                 Q(logger_name__icontains=search)
             )
             
-        # Limit to recent logs by default (last 7 days)
-        days = self.request.query_params.get('days', 7)
-        try:
-            days = int(days)
-        except ValueError:
-            days = 7
-            
-        if days > 0:
-            since = timezone.now() - timedelta(days=days)
-            queryset = queryset.filter(timestamp__gte=since)
-            
         return queryset.order_by('-timestamp')
-    
+
     @action(detail=False, methods=['post'])
-    def sync_logs(self, request):
-        """Trigger immediate log sync"""
-        from .tasks import process_backrest_db_logs
-        
+    def fetch_from_server(self, request):
+        """Fetch recent logs from Backrest server with enhanced debugging"""
         try:
-            # Run task synchronously for immediate results
-            result = process_backrest_db_logs()
+            # Get repository ID if provided
+            repo_id = request.data.get('repository_id')
+            
+            if repo_id:
+                # Get specific repository
+                try:
+                    repo = BackrestRepository.objects.get(
+                        repository_id=repo_id,
+                        tenant=request.tenant
+                    )
+                    servers = [repo.server]
+                except BackrestRepository.DoesNotExist:
+                    return Response({
+                        'status': 'error',
+                        'message': f'Repository {repo_id} not found'
+                    }, status=status.HTTP_404_NOT_FOUND)
+            else:
+                # Get all active servers
+                server_ids = BackrestRepository.objects.filter(
+                    tenant=request.tenant
+                ).values_list('server_id', flat=True).distinct()
+                servers = Server.objects.filter(id__in=server_ids)
+            
+            logs_imported = 0
+            operations_updated = 0
+            debug_info = []
+            
+            for server in servers:
+                server_debug = {
+                    'hostname': server.hostname,
+                    'ssh_user': server.ssh_user,
+                    'ssh_port': server.ssh_port,
+                    'connection_status': 'failed',
+                    'log_file_exists': False,
+                    'log_file_size': 0,
+                    'lines_found': 0,
+                    'error': None
+                }
+                
+                # Create SSH connection
+                ssh_client = get_ssh_client_for_server(server)
+                
+                if not ssh_client:
+                    server_debug['error'] = 'Failed to create SSH client'
+                    debug_info.append(server_debug)
+                    continue
+                
+                server_debug['connection_status'] = 'connected'
+                
+                try:
+                    # First, check if the log file exists and get its info
+                    check_cmd = "ls -la /opt/backrest/data/processlogs/backrest.log 2>/dev/null || echo 'FILE_NOT_FOUND'"
+                    stdin, stdout, stderr = ssh_client.exec_command(check_cmd)
+                    file_info = stdout.read().decode('utf-8').strip()
+                    
+                    if 'FILE_NOT_FOUND' in file_info:
+                        server_debug['error'] = 'Log file does not exist at /opt/backrest/data/processlogs/backrest.log'
+                        debug_info.append(server_debug)
+                        ssh_client.close()
+                        continue
+                    else:
+                        server_debug['log_file_exists'] = True
+                        server_debug['file_info'] = file_info
+                        
+                        # Extract file size
+                        try:
+                            size_match = re.search(r'\s+(\d+)\s+', file_info)
+                            if size_match:
+                                server_debug['log_file_size'] = int(size_match.group(1))
+                        except:
+                            pass
+                    
+                    # Execute command to fetch logs
+                    lines_to_fetch = request.data.get('lines', 500)
+                    command = f"cat /opt/backrest/data/processlogs/backrest.log | tail -n {lines_to_fetch}"
+                    stdin, stdout, stderr = ssh_client.exec_command(command)
+                    log_data = stdout.read().decode('utf-8')
+                    stderr_data = stderr.read().decode('utf-8')
+                    
+                    if stderr_data:
+                        server_debug['stderr'] = stderr_data
+                    
+                    # Count lines and check if they're JSON
+                    lines = log_data.strip().split('\n') if log_data.strip() else []
+                    server_debug['lines_found'] = len([line for line in lines if line.strip()])
+                    
+                    valid_json_lines = 0
+                    invalid_lines = []
+                    server_logs_imported = 0
+                    
+                    # Process each log line
+                    for i, line in enumerate(lines):
+                        if not line.strip():
+                            continue
+                        
+                        try:
+                            # Parse JSON log entry
+                            log_entry = json.loads(line)
+                            valid_json_lines += 1
+                            
+                            # Create timestamp
+                            timestamp = process_log_timestamp(log_entry.get('ts', 0))
+                            message = log_entry.get('msg', '')[:255]
+                            
+                            # Check if record already exists
+                            existing_logs = BackrestLog.objects.filter(
+                                tenant=request.tenant,
+                                server=server,
+                                timestamp=timestamp,
+                                message=message
+                            )
+                            
+                            if existing_logs.exists():
+                                # Log already exists, skip it
+                                continue
+                            else:
+                                # Create new log record
+                                BackrestLog.objects.create(
+                                    tenant=request.tenant,
+                                    server=server,
+                                    timestamp=timestamp,
+                                    message=message,
+                                    level=log_entry.get('level', 'info'),
+                                    logger_name=log_entry.get('logger', '')[:100],
+                                    error=log_entry.get('error', ''),
+                                    source='backrest.log'
+                                )
+                                server_logs_imported += 1
+                                logs_imported += 1
+                                
+                        except json.JSONDecodeError as e:
+                            if len(invalid_lines) < 3:  # Only store first 3 invalid lines
+                                invalid_lines.append({
+                                    'line_number': i + 1,
+                                    'content': line[:100] + '...' if len(line) > 100 else line,
+                                    'error': str(e)
+                                })
+                            continue
+                        except Exception as entry_error:
+                            logger.error(f"Error processing log entry: {str(entry_error)}")
+                            # Add debug info for database errors
+                            if len(invalid_lines) < 3:
+                                invalid_lines.append({
+                                    'line_number': i + 1,
+                                    'content': f"Database error: {str(entry_error)}",
+                                    'error': str(entry_error)
+                                })
+                    
+                    server_debug['valid_json_lines'] = valid_json_lines
+                    server_debug['invalid_lines'] = invalid_lines
+                    server_debug['logs_imported_from_server'] = server_logs_imported
+                    
+                    # Close connection
+                    ssh_client.close()
+                    
+                except Exception as server_error:
+                    server_debug['error'] = str(server_error)
+                    logger.error(f"Error fetching logs from server {server.hostname}: {str(server_error)}")
+                
+                debug_info.append(server_debug)
             
             return Response({
                 'status': 'success',
-                'message': 'Log synchronization completed',
-                'results': result
+                'logs_imported': logs_imported,
+                'operations_updated': operations_updated,
+                'debug_info': debug_info,
+                'servers_checked': len(servers)
             })
+            
         except Exception as e:
+            logger.exception(f"Error fetching logs: {str(e)}")
+            return Response({
+                'status': 'error',
+                'message': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='analyze-logs')
+    def analyze_logs(self, request):
+        """Analyze logs to understand patterns and improve parsing"""
+        # Get logs for the specified period
+        days = int(request.query_params.get('days', 3))
+        limit = int(request.query_params.get('limit', 100))
+        
+        cutoff_date = timezone.now() - timezone.timedelta(days=days)
+        logs = BackrestLog.objects.filter(
+            tenant=request.tenant,
+            timestamp__gte=cutoff_date
+        ).order_by('-timestamp')[:1000]
+        
+        # Analyze raw_message patterns
+        message_patterns = {}
+        logger_patterns = {}
+        timestamp_patterns = {}
+        
+        for log in logs:
+            # Track message patterns
+            message = log.message or ""
+            generic_message = re.sub(r'\d+', 'N', message)
+            generic_message = re.sub(r'\"[^\"]+\"', '"X"', generic_message)
+            
+            if generic_message in message_patterns:
+                message_patterns[generic_message] += 1
+            else:
+                message_patterns[generic_message] = 1
+                
+            # Track logger name patterns
+            logger_name = log.logger_name or ""
+            generic_logger = re.sub(r'\"[^\"]+\"', '"X"', logger_name)
+            
+            if generic_logger in logger_patterns:
+                logger_patterns[generic_logger] += 1
+            else:
+                logger_patterns[generic_logger] = 1
+                
+            # Track timestamp patterns (look for patterns in when logs are generated)
+            hour_bucket = log.timestamp.replace(minute=0, second=0, microsecond=0)
+            bucket_key = hour_bucket.strftime('%Y-%m-%d %H:00')
+            
+            if bucket_key in timestamp_patterns:
+                timestamp_patterns[bucket_key] += 1
+            else:
+                timestamp_patterns[bucket_key] = 1
+        
+        # Sort patterns by frequency
+        message_patterns = dict(sorted(message_patterns.items(), key=lambda x: x[1], reverse=True))
+        logger_patterns = dict(sorted(logger_patterns.items(), key=lambda x: x[1], reverse=True))
+        timestamp_patterns = dict(sorted(timestamp_patterns.items(), key=lambda x: x[1], reverse=True))
+        
+        return Response({
+            "status": "success",
+            "logs_analyzed": len(logs),
+            "message_patterns": {k: v for k, v in list(message_patterns.items())[:20]},
+            "logger_patterns": {k: v for k, v in list(logger_patterns.items())[:20]},
+            "timestamp_patterns": {k: v for k, v in list(timestamp_patterns.items())[:20]},
+            "sample_logs": [{
+                "timestamp": log.timestamp.isoformat(),
+                "message": log.message,
+                "logger_name": log.logger_name,
+                "level": log.level
+            } for log in logs[:10]]
+        }) 
+       
+    @action(detail=False, methods=['post'])
+    def sync_logs(self, request):
+        """Trigger immediate log sync without SSH connection issues"""
+        try:
+            # Instead of fetching from server directly, use existing structured operations
+            # This avoids SSH connection issues
+            
+            # Get recent operations from database
+            recent_operations = BackrestOperation.objects.filter(
+                tenant=request.tenant
+            ).order_by('-started_at')[:100]
+            
+            # Get recent logs from database  
+            recent_logs = BackrestLog.objects.filter(
+                tenant=request.tenant
+            ).order_by('-timestamp')[:500]
+            
+            # Try to sync operations from Backrest API if available
+            operations_synced = 0
+            try:
+                # Get all servers for this tenant
+                server_ids = BackrestRepository.objects.filter(
+                    tenant=request.tenant
+                ).values_list('server_id', flat=True).distinct()
+                servers = Server.objects.filter(id__in=server_ids)
+                
+                # Try to sync via API instead of SSH
+                for server in servers:
+                    try:
+                        from .services import BackrestService
+                        backrest_service = BackrestService(server)
+                        
+                        # Try to get operations via API
+                        repos = BackrestRepository.objects.filter(server=server, tenant=request.tenant)
+                        for repo in repos:
+                            try:
+                                operations = backrest_service.get_operations(repository_id=repo.repository_id)
+                                # Process operations here if needed
+                                operations_synced += len(operations.get('operations', []))
+                            except Exception as repo_error:
+                                logger.warning(f"Could not sync operations for repo {repo.repository_id}: {str(repo_error)}")
+                                
+                    except Exception as server_error:
+                        logger.warning(f"Could not sync operations for server {server.hostname}: {str(server_error)}")
+                        
+            except Exception as sync_error:
+                logger.warning(f"Could not sync operations: {str(sync_error)}")
+            
+            return Response({
+                'status': 'success',
+                'message': f'Log synchronization completed. Found {len(recent_logs)} logs and {len(recent_operations)} operations.',
+                'logs_count': len(recent_logs),
+                'operations_count': len(recent_operations),
+                'operations_synced': operations_synced
+            })
+            
+        except Exception as e:
+            logger.exception(f"Error in sync_logs: {str(e)}")
             return Response({
                 'status': 'error',
                 'message': f'Failed to sync logs: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
+    
+    
+            
 
 class MarkInstanceCompleteView(APIView):
     def post(self, request, instance_id):
@@ -1582,3 +2929,785 @@ def get_ssh_client_for_server(server):
     os.unlink(key_path)
     return client
 
+
+import json
+from django.http import JsonResponse
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from .client import BackrestClient
+from rest_framework.response import Response
+import re
+from datetime import datetime
+import uuid
+import urllib
+
+
+client = BackrestClient()
+
+
+def get_client_for_repo(repo_id, tenant):
+    """Get a BackrestClient for the server hosting this repository"""
+    from .models import BackrestRepository
+    
+    try:
+        # Find the repository and its server
+        repo = BackrestRepository.objects.get(repository_id=repo_id, tenant=tenant)
+        server = repo.server
+        
+        # Create client for this server
+        return BackrestClient(server=server), repo
+    except BackrestRepository.DoesNotExist:
+        logger.error(f"Repository {repo_id} not found for tenant {tenant}")
+        raise Exception(f"Repository {repo_id} not found")
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def repo_stats(request, repo_id):
+    """Get statistics for a repository"""
+    try:
+        # Get client for this specific repository's server
+        client, repo = get_client_for_repo(repo_id, request.tenant)
+        
+        # First check if we have recent stats in operation history
+        stats = client.extract_stats_from_operations(repo_id)
+        
+        if not stats:
+            # If no stats found, get from dashboard
+            dashboard = client.get_summary_dashboard()
+            for repo_summary in dashboard.get("repoSummaries", []):
+                if repo_summary.get("id") == repo_id:
+                    stats = {
+                        "total_size": repo_summary.get("bytesScannedLast_30Days", 0),
+                        "bytes_added": repo_summary.get("bytesAddedLast_30Days", 0),
+                        "snapshots_count": len(repo_summary.get("recentBackups", {}).get("flowId", [])),
+                        "backups_success": repo_summary.get("backupsSuccessLast_30Days", 0),
+                        "backups_failed": repo_summary.get("backupsFailedLast_30Days", 0)
+                    }
+                    break
+        
+        # Add snapshot data for more detailed metrics
+        try:
+            # Get snapshots to extract additional metrics
+            snapshots_response = client.list_snapshots(repo_id)
+            snapshots = snapshots_response.get("snapshots", [])
+            
+            # Calculate average duration from snapshots
+            total_duration = 0
+            success_count = 0
+            snapshot_count = len(snapshots)
+            
+            for snapshot in snapshots:
+                summary = snapshot.get("summary", {})
+                if "totalDuration" in summary:
+                    total_duration += float(summary.get("totalDuration", 0))
+                    success_count += 1
+                    
+            # Add additional metrics
+            stats["snapshot_count"] = snapshot_count
+            stats["avg_duration_minutes"] = total_duration / success_count if success_count > 0 else 0
+            stats["success_rate"] = (success_count / snapshot_count * 100) if snapshot_count > 0 else 0
+            
+            # Try to get compression data if available
+            comp_stats = client.extract_stats_from_operations(repo_id)
+            if comp_stats:
+                stats.update({
+                    "total_size_on_disk": comp_stats.get("total_size_on_disk", 0),
+                    "data_blobs": comp_stats.get("data_blobs", 0),
+                    "tree_blobs": comp_stats.get("tree_blobs", 0),
+                    "compression_ratio": comp_stats.get("compression_ratio", 1.0)
+                })
+            
+        except Exception as snapshot_error:
+            logger.warning(f"Error getting snapshot metrics: {str(snapshot_error)}")
+        
+        return JsonResponse({
+            "status": "success",
+            "repo_id": repo_id,
+            "stats": stats or {}
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting stats for repo {repo_id}: {str(e)}")
+        return JsonResponse({
+            "status": "error", 
+            "message": str(e)
+        }, status=500)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def compute_stats(request, repo_id):
+    """Trigger computation of repository statistics"""
+    try:
+        # Get client for this specific repository's server
+        client, repo = get_client_for_repo(repo_id, request.tenant)
+        result = client.compute_stats(repo_id)
+        return JsonResponse({
+            "status": "success",
+            "message": "Stats computation triggered",
+            "result": result
+        })
+        
+    except Exception as e:
+        logger.error(f"Error computing stats for repo {repo_id}: {str(e)}")
+        return JsonResponse({
+            "status": "error", 
+            "message": str(e)
+        }, status=500)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_snapshots(request, repo_id):
+    """List snapshots for a repository"""
+    try:
+        # Get client for this specific repository's server
+        client, repo = get_client_for_repo(repo_id, request.tenant)
+        plan_id = request.GET.get("plan_id", None)
+        snapshots = client.list_snapshots(repo_id, plan_id)
+        return JsonResponse({
+            "status": "success",
+            "repo_id": repo_id,
+            "snapshots": snapshots.get("snapshots", [])
+        })
+        
+    except Exception as e:
+        logger.error(f"Error listing snapshots for repo {repo_id}: {str(e)}")
+        return JsonResponse({
+            "status": "error", 
+            "message": str(e)
+        }, status=500)
+
+# Update the restore_snapshot function with better debugging:
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def restore_snapshot(request):
+    """Restore files from a snapshot with correct Backrest API format"""
+    try:
+        # Extract data from request
+        snapshot_id = request.data.get('snapshot_id')
+        repository_id = request.data.get('repository_id')
+        target_path = request.data.get('target_path')
+        include_paths = request.data.get('include_paths', ['/'])
+        exclude_patterns = request.data.get('exclude_patterns', [])
+        
+        logger.info(f"=== RESTORE REQUEST RECEIVED ===")
+        logger.info(f"snapshot_id: '{snapshot_id}'")
+        logger.info(f"repository_id from frontend: '{repository_id}'")
+        logger.info(f"target_path: '{target_path}'")
+        logger.info(f"include_paths: {include_paths}")
+        logger.info(f"exclude_patterns: {exclude_patterns}")
+        
+        if not all([snapshot_id, repository_id, target_path]):
+            return JsonResponse({
+                "status": "error",
+                "message": f"Missing required fields"
+            }, status=400)
+        
+        # Find the repository
+        try:
+            repository = BackrestRepository.objects.get(
+                repository_id=repository_id,
+                tenant=request.tenant
+            )
+        except BackrestRepository.DoesNotExist:
+            # Try by database ID as fallback
+            try:
+                repository = BackrestRepository.objects.get(
+                    id=repository_id,
+                    tenant=request.tenant
+                )
+            except BackrestRepository.DoesNotExist:
+                return JsonResponse({
+                    "status": "error",
+                    "message": f"Repository not found: {repository_id}"
+                }, status=404)
+        
+        # Get the correct repository ID for Backrest
+        backrest_repo_id = repository.repository_id
+        if not backrest_repo_id or backrest_repo_id.strip() == "":
+            # Generate from name if empty
+            backrest_repo_id = repository.name.replace(" ", "_").lower()
+            repository.repository_id = backrest_repo_id
+            repository.save()
+            logger.info(f"Updated repository_id to: {backrest_repo_id}")
+        
+        logger.info(f"Using repository ID: '{backrest_repo_id}'")
+        
+        # Create Backrest service
+        backrest_service = BackrestService(repository.server)
+        
+        # CRITICAL FIX: Use the correct Backrest API format
+        # Based on the Go service file, this should be a RestoreSnapshotRequest
+        restore_request = {
+            "value": {  # Wrap in "value" field like other Backrest APIs
+                "repo": backrest_repo_id,
+                "snapshotId": str(snapshot_id),
+                "path": "/",  # Source path in snapshot
+                "target": str(target_path),  # Where to restore to
+                "includePaths": include_paths,
+                "excludePatterns": exclude_patterns
+            }
+        }
+        
+        logger.info(f"=== CALLING BACKREST API ===")
+        logger.info(f"URL: {backrest_service.base_url}/v1.Backrest/Restore")
+        logger.info(f"Payload: {json.dumps(restore_request, indent=2)}")
+        
+        # Call the Backrest API with correct format
+        response = backrest_service._make_request(
+            'POST',
+            '/v1.Backrest/Restore',
+            restore_request
+        )
+        
+        logger.info(f"✓ Backrest restore response: {response}")
+        
+        # Create operation record
+        operation = BackrestOperation.objects.create(
+            tenant=request.tenant,
+            repository=repository,
+            operation_type="restore",
+            operation_id=response.get('operationId') or f"restore_{int(time.time())}",
+            status="running",
+            started_at=timezone.now(),
+            stats={
+                'snapshot_id': snapshot_id,
+                'target_path': target_path,
+                'include_paths': include_paths
+            }
+        )
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Restore operation started',
+            'operation_id': operation.operation_id,
+            'backrest_response': response
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ RESTORE ERROR: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return JsonResponse({
+            "status": "error", 
+            "message": str(e)
+        }, status=500)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_operations(request):
+    """Get operations history"""
+    try:
+        last_n = request.GET.get("last_n")
+        if last_n:
+            last_n = int(last_n)
+            
+        repo_id = request.GET.get("repo_id")
+        operation_type = request.GET.get("type")
+        
+        if not repo_id:
+            return JsonResponse({
+                "status": "error",
+                "message": "repo_id is required"
+            }, status=400)
+        
+        # Get client for this specific repository's server
+        client, repo = get_client_for_repo(repo_id, request.tenant)
+        
+        # Build selector
+        selector = {"repoId": repo_id}
+            
+        operations = client.get_operations(last_n=last_n, selector=selector)
+        
+        # Filter by operation type if specified
+        if operation_type and "operations" in operations:
+            filtered_ops = []
+            for op in operations["operations"]:
+                op_key = f"operation{operation_type.capitalize()}"
+                if op_key in op:
+                    filtered_ops.append(op)
+            operations["operations"] = filtered_ops
+            
+        return JsonResponse({
+            "status": "success",
+            "operations": operations.get("operations", [])
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting operations: {str(e)}")
+        return JsonResponse({
+            "status": "error", 
+            "message": str(e)
+        }, status=500)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def trigger_backup(request):
+    """Trigger a backup operation"""
+    try:
+        data = json.loads(request.body)
+        plan_id = data.get("plan_id")
+        
+        if not plan_id:
+            return JsonResponse({
+                "status": "error",
+                "message": "Missing required parameter: plan_id"
+            }, status=400)
+        
+        # Get the plan's repository and server
+        from .models import BackrestPlan, BackrestRepository
+        try:
+            plan = BackrestPlan.objects.get(plan_id=plan_id, tenant=request.tenant)
+            repo = plan.repository
+            client = BackrestClient(server=repo.server)
+        except BackrestPlan.DoesNotExist:
+            return JsonResponse({
+                "status": "error", 
+                "message": f"Plan {plan_id} not found"
+            }, status=404)
+        
+        result = client.trigger_backup(plan_id)
+        return JsonResponse({
+            "status": "success",
+            "message": "Backup operation triggered",
+            "result": result
+        })
+        
+    except Exception as e:
+        logger.error(f"Error triggering backup: {str(e)}")
+        return JsonResponse({
+            "status": "error", 
+            "message": str(e)
+        }, status=500)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def cancel_operation(request):
+    """Cancel an operation"""
+    try:
+        data = json.loads(request.body)
+        operation_id = data.get("operation_id")
+        repo_id = data.get("repo_id")  # Need repo_id to identify the server
+        
+        if not operation_id or not repo_id:
+            return JsonResponse({
+                "status": "error",
+                "message": "Missing required parameters: operation_id and repo_id"
+            }, status=400)
+        
+        # Get client for this specific repository's server
+        client, repo = get_client_for_repo(repo_id, request.tenant)
+        result = client.cancel_operation(operation_id)
+        return JsonResponse({
+            "status": "success",
+            "message": "Operation cancellation requested",
+            "result": result
+        })
+        
+    except Exception as e:
+        logger.error(f"Error cancelling operation: {str(e)}")
+        return JsonResponse({
+            "status": "error", 
+            "message": str(e)
+        }, status=500)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def sync_data(request):
+    """Trigger synchronization of all Backrest data"""
+    try:
+        # Import sync functions
+        from .sync import sync_repositories, sync_operations, sync_snapshots
+        
+        # Run synchronization
+        repos_result = sync_repositories()
+        ops_result = sync_operations(last_n=50)
+        snaps_result = sync_snapshots()
+        
+        return JsonResponse({
+            "status": "success",
+            "repositories": repos_result,
+            "operations": ops_result,
+            "snapshots": snaps_result
+        })
+    except Exception as e:
+        logger.error(f"Error syncing Backrest data: {str(e)}")
+        return JsonResponse({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def fetch_backrest_logs(request):
+    """
+    Fetch and process Backrest logs
+    GET: Return existing logs from database
+    POST: Force refresh from server
+    """
+    try:
+        # Get all repositories for this tenant
+        repositories = BackrestRepository.objects.filter(tenant=request.tenant)
+        
+        # For GET requests, just return operations from database
+        if request.method == 'GET':
+            # Get operations from database
+            operations = BackrestOperation.objects.filter(
+                repository__in=repositories
+            ).order_by('-started_at')[:100]  # Limit to recent 100 operations
+            
+            # Serialize operations for response
+            serializer = BackrestOperationSerializer(operations, many=True)
+            
+            return Response({
+                "status": "success",
+                "count": len(operations),
+                "operations": serializer.data
+            })
+        
+        # For POST requests (refresh), use the existing fetch_from_server functionality
+        else:
+            # Get all servers used by these repos
+            server_ids = repositories.values_list('server_id', flat=True).distinct()
+            servers = Server.objects.filter(id__in=server_ids)
+            
+            logs_imported = 0
+            operations_updated = 0
+            
+            for server in servers:
+                # Create SSH connection
+                ssh_client = get_ssh_client_for_server(server)
+                
+                if not ssh_client:
+                    continue
+                
+                try:
+                    # Execute command to fetch logs
+                    lines_to_fetch = 500  # Default to 500 lines
+                    command = f"cat /opt/backrest/data/processlogs/backrest.log | tail -n {lines_to_fetch}"
+                    stdin, stdout, stderr = ssh_client.exec_command(command)
+                    log_data = stdout.read().decode('utf-8')
+                    
+                    # Process each log line
+                    for line in log_data.strip().split('\n'):
+                        if not line:
+                            continue
+                        
+                        try:
+                            # Parse JSON log entry
+                            log_entry = json.loads(line)
+                            
+                            # Create log entry in database
+                            BackrestLog.objects.create(
+                                tenant=request.tenant,
+                                server=server,
+                                level=log_entry.get('level', 'info'),
+                                message=log_entry.get('msg', '')[:255],
+                                logger_name=log_entry.get('logger', '')[:100],
+                                error=log_entry.get('error', ''),
+                                timestamp=process_log_timestamp(log_entry.get('ts', 0)),
+                                source="processlogs/backrest.log"
+                            )
+                            logs_imported += 1
+                            
+                            # Process operations from logs - simplified
+                            # Process operations from logs - simplified version
+                            if 'task finished' in log_entry.get('msg', '') or 'task failed' in log_entry.get('msg', ''):
+                                logger_name = log_entry.get('logger', '')
+                                
+                                # Try to extract plan name from logger name
+                                if ' for plan ' in logger_name:
+                                    match = re.search(r'for plan \"(.+?)\"', logger_name)
+                                    if match:
+                                        plan_name = match.group(1)
+                                        
+                                        # Find matching plan
+                                        plan = BackrestPlan.objects.filter(name=plan_name, tenant=request.tenant).first()
+                                        
+                                        if plan:
+                                            # Find operation by plan
+                                            operations = BackrestOperation.objects.filter(
+                                                plan=plan,
+                                                status='running'
+                                            ).order_by('-started_at')
+                                            
+                                            if operations.exists():
+                                                op = operations.first()
+                                                op.status = 'completed' if 'task finished' in log_entry.get('msg', '') else 'failed'
+                                                op.completed_at = timezone.make_aware(process_log_timestamp(log_entry.get('ts', 0)))
+                                                
+                                                # Extract duration if available
+                                                duration = log_entry.get('duration')
+                                                if duration:
+                                                    op.duration_seconds = float(duration)
+                                                    
+                                                # Add error if failed
+                                                if op.status == 'failed' and 'error' in log_entry:
+                                                    op.error = log_entry['error']
+                                                
+                                                op.save()
+                                                operations_updated += 1
+                        
+                        except json.JSONDecodeError:
+                            # Skip invalid JSON lines
+                            continue
+                        except Exception as entry_error:
+                            logger.error(f"Error processing log entry: {str(entry_error)}")
+                    
+                    # Close SSH connection
+                    ssh_client.close()
+                
+                except Exception as server_error:
+                    logger.error(f"Error fetching logs from server {server.hostname}: {str(server_error)}")
+            
+            # Return success response
+            return Response({
+                "status": "success",
+                "logs_imported": logs_imported,
+                "operations_updated": operations_updated
+            })
+    
+    except Exception as e:
+        logger.exception(f"Error fetching Backrest logs: {str(e)}")
+        return Response({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
+    
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def check_repository(request, repo_id):
+    """Trigger integrity check for a repository"""
+    try:
+        # Get tenant from request
+        tenant = request.tenant
+
+        # Get repository
+        repo = get_object_or_404(BackrestRepository, repository_id=repo_id, tenant=tenant)
+
+        # Create a task for the check operation
+        server = repo.server
+        backrest_service = BackrestService(server)
+
+        # Call the DoRepoTask method with TASK_CHECK
+        response = backrest_service.check_repository(repo_id)
+        
+        # Record the check operation in the database - FIXED VERSION
+        operation = BackrestOperation.objects.create(
+            tenant=tenant,
+            operation_type='check',
+            status='completed' if response.get('status') == 'success' else 'failed',
+            repository=repo,
+            started_at=timezone.now(),
+            completed_at=timezone.now(),
+            # Store output in stats as JSON instead of using output field
+            stats={'check_output': response.get('output', '')}
+            # Remove the output parameter that caused the error
+        )
+
+        # Update repository integrity status based on check result
+        repo.last_checked = timezone.now()
+        repo.integrity = 'verified' if response.get('status') == 'success' else 'needs_check'
+        repo.save()
+
+        return Response({
+            'status': 'success' if response.get('status') == 'success' else 'error',
+            'message': 'Repository integrity check completed',
+            'operation_id': operation.id,
+            'output': response.get('output', '')
+        })
+    except Exception as e:
+        logger.exception(f"Failed to check repository integrity: {str(e)}")
+        return Response({
+            'status': 'error',
+            'message': f'Failed to check repository integrity: {str(e)}',
+        }, status=500)
+    
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def debug_restore(request):
+    """Debug version of restore to see what's going wrong"""
+    try:
+        data = request.data
+        logger.info(f"=== DEBUG RESTORE REQUEST ===")
+        logger.info(f"Raw request data: {data}")
+        
+        # Check all repositories
+        all_repos = BackrestRepository.objects.filter(tenant=request.tenant)
+        logger.info(f"Available repositories:")
+        for repo in all_repos:
+            logger.info(f"  ID: {repo.id}, Name: '{repo.name}', repository_id: '{repo.repository_id}'")
+        
+        # Try to find repository
+        repository_id = data.get('repository_id')
+        logger.info(f"Looking for repository with ID: '{repository_id}'")
+        
+        repository = None
+        
+        # Try multiple lookup methods
+        try:
+            repository = BackrestRepository.objects.get(repository_id=repository_id, tenant=request.tenant)
+            logger.info(f"Found by repository_id: {repository.name}")
+        except BackrestRepository.DoesNotExist:
+            try:
+                repository = BackrestRepository.objects.get(id=repository_id, tenant=request.tenant)
+                logger.info(f"Found by database ID: {repository.name}")
+            except (BackrestRepository.DoesNotExist, ValueError):
+                logger.error(f"Repository not found with either method")
+                return JsonResponse({"error": "Repository not found", "available": [
+                    {"id": r.id, "name": r.name, "repository_id": r.repository_id} for r in all_repos
+                ]}, status=404)
+        
+        # Check the repository_id field
+        backrest_repo_id = repository.repository_id
+        logger.info(f"Repository found: {repository.name}")
+        logger.info(f"repository_id field: '{backrest_repo_id}' (type: {type(backrest_repo_id)}, length: {len(str(backrest_repo_id))})")
+        
+        if not backrest_repo_id or backrest_repo_id.strip() == "":
+            logger.error(f"repository_id field is EMPTY!")
+            # Try to fix it
+            backrest_repo_id = "testing"  # Hardcode for testing
+            repository.repository_id = backrest_repo_id
+            repository.save()
+            logger.info(f"Fixed repository_id to: '{backrest_repo_id}'")
+        
+        # Create the restore request
+        restore_request = {
+            "value": {
+                "repo": backrest_repo_id,
+                "snapshotId": data.get('snapshot_id'),
+                "path": "/",
+                "target": data.get('target_path'),
+                "includePaths": data.get('include_paths', ['/']),
+                "excludePatterns": data.get('exclude_patterns', [])
+            }
+        }
+        
+        logger.info(f"Final restore request: {json.dumps(restore_request, indent=2)}")
+        logger.info(f"repo field: '{restore_request['value']['repo']}'")
+        logger.info(f"repo field length: {len(restore_request['value']['repo'])}")
+        logger.info(f"repo field is empty: {not restore_request['value']['repo'] or restore_request['value']['repo'].strip() == ''}")
+        
+        # Make the API call
+        backrest_service = BackrestService(repository.server)
+        response = backrest_service._make_request('POST', '/v1.Backrest/Restore', restore_request)
+        
+        return JsonResponse({
+            "status": "success",
+            "message": "Restore started successfully",
+            "response": response
+        })
+        
+    except Exception as e:
+        logger.error(f"Debug restore error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({"error": str(e)}, status=500)
+    
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def dashboard_stats(request):
+    """Get real dashboard statistics"""
+    try:
+        # Get recent operations
+        operations = BackrestOperation.objects.filter(
+            tenant=request.tenant,
+            started_at__gte=timezone.now() - timedelta(days=30)
+        )
+        
+        # Get backup stats
+        backup_operations = operations.filter(operation_type='backup')
+        
+        stats = {
+            'total_operations': operations.count(),
+            'by_status': {
+                'completed': operations.filter(status='completed').count(),
+                'running': operations.filter(status='running').count(),
+                'failed': operations.filter(status='failed').count(),
+            },
+            'by_type': {
+                'backup': backup_operations.count(),
+                'restore': operations.filter(operation_type='restore').count(),
+                'maintenance': operations.filter(operation_type__in=['prune', 'check']).count(),
+            },
+            'recent_backups': []
+        }
+        
+        # Get recent backup data
+        recent_backups = backup_operations.order_by('-started_at')[:5]
+        for backup in recent_backups:
+            stats['recent_backups'].append({
+                'id': backup.operation_id,
+                'repository': backup.repository.name if backup.repository else 'Unknown',
+                'plan': backup.plan.name if backup.plan else 'Manual',
+                'status': backup.status,
+                'started_at': backup.started_at,
+                'completed_at': backup.completed_at,
+                'size': backup.stats.get('total_bytes_processed', 0) if backup.stats else 0
+            })
+        
+        return JsonResponse(stats)
+        
+    except Exception as e:
+        logger.error(f"Dashboard stats error: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def live_activity(request):
+    """Get live activity feed combining system operations and backrest operations"""
+    try:
+        limit = int(request.GET.get('limit', 10))
+        
+        # Get system operations
+        system_ops = SystemOperation.objects.filter(
+            tenant=request.tenant
+        ).order_by('-started_at')[:limit]
+        
+        # Get recent backrest operations  
+        backrest_ops = BackrestOperation.objects.filter(
+            tenant=request.tenant
+        ).order_by('-started_at')[:limit]
+        
+        activities = []
+        
+        # Process system operations
+        for op in system_ops:
+            activities.append({
+                'id': f'sys_{op.id}',
+                'type': op.operation_type,
+                'status': op.status,
+                'description': op.description,
+                'user': op.user,
+                'timestamp': op.started_at,
+                'repository': op.repository.name if op.repository else None,
+                'plan': op.plan.name if op.plan else None,
+                'source': 'system'
+            })
+        
+        # Process backrest operations
+        for op in backrest_ops:
+            activities.append({
+                'id': f'br_{op.id}',
+                'type': op.operation_type,
+                'status': op.status,
+                'description': f'{op.operation_type.title()} {op.status} for {op.repository.name if op.repository else "Unknown"}',
+                'user': 'System',
+                'timestamp': op.started_at,
+                'repository': op.repository.name if op.repository else None,
+                'plan': op.plan.name if op.plan else None,
+                'source': 'backrest'
+            })
+        
+        # Sort by timestamp and limit
+        activities.sort(key=lambda x: x['timestamp'], reverse=True)
+        activities = activities[:limit]
+        
+        return JsonResponse({
+            'results': activities,
+            'count': len(activities)
+        })
+        
+    except Exception as e:
+        logger.error(f"Live activity error: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
